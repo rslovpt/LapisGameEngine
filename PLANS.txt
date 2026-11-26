@@ -32,34 +32,34 @@ Legend:  [x] done   [~] partially done   [ ] not started
 ------------------------------------------------------------------------------
 PHASE 0 - Repository & build system
 ------------------------------------------------------------------------------
-[ ] Repository layout (Engine/, Sandbox/, Tests/, Docs/)
-[ ] Root CMakeLists.txt (C++17, warnings, MSVC + GCC/Clang)
-[ ] .gitignore / .gitattributes
-[ ] README with build instructions
-[ ] PLANS.txt checklist (this file)
+[x] Repository layout (Engine/, Sandbox/, Tests/, Docs/)
+[x] Root CMakeLists.txt (C++17, warnings, MSVC + GCC/Clang)
+[x] .gitignore / .gitattributes
+[x] README with build instructions
+[x] PLANS.txt checklist (this file)
 [ ] Continuous integration (GitHub Actions: Windows build + Linux tests)
 
 ------------------------------------------------------------------------------
 PHASE 1 - Core
 ------------------------------------------------------------------------------
-[ ] Basic types / platform detection macros
-[ ] Logging system (levels, colored console output, timestamps)
-[ ] Assertions (LAPIS_ASSERT / LAPIS_VERIFY with debug break)
-[ ] High-resolution timer / frame clock
-[ ] File system helpers (read text/binary, write, exists)
-[ ] Event system (typed events + dispatcher)
+[x] Basic types / platform detection macros
+[x] Logging system (levels, colored console output, timestamps)
+[x] Assertions (LAPIS_ASSERT / LAPIS_VERIFY with debug break)
+[x] High-resolution timer / frame clock
+[x] File system helpers (read text/binary, write, exists)
+[x] Event system (typed events + dispatcher)
 [ ] Custom allocators (linear/frame allocator, pool allocator)
 [ ] Job system (multithreaded task scheduler)
 
 ------------------------------------------------------------------------------
 PHASE 2 - Math
 ------------------------------------------------------------------------------
-[ ] Vec2 / Vec3 / Vec4
-[ ] Mat3 / Mat4 (column-major, OpenGL convention)
-[ ] Quaternions (axis-angle, euler, slerp, to-matrix)
-[ ] Transform helpers (translate, rotate, scale, lookAt, perspective, ortho)
-[ ] Geometric primitives: AABB, Ray, Plane, Sphere, Frustum
-[ ] Unit tests for math
+[x] Vec2 / Vec3 / Vec4
+[x] Mat4 (column-major, OpenGL convention)
+[x] Quaternions (axis-angle, euler, slerp, to-matrix)
+[x] Transform helpers (translate, rotate, scale, lookAt, perspective, ortho)
+[x] Geometric primitives: AABB, Ray, Plane, Sphere, Frustum
+[x] Unit tests for math
 
 ------------------------------------------------------------------------------
 PHASE 3 - Platform layer
