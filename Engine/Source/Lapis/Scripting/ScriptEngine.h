@@ -54,6 +54,12 @@ public:
     void DispatchCollision(EntityID self, EntityID other);
     void DestroyEntity(EntityID id);
 
+    // Hot reload: re-compiles scripts whose files changed on disk (e.g. saved
+    // from VS Code) and swaps the new functions into running instances.
+    // Called automatically twice a second from UpdateEntities.
+    int  ReloadChangedScripts();
+    bool HotReloadEnabled = true;
+
     lua_State* GetState() const { return m_L; }
     Scene*     GetScene() const { return m_Scene; }
 
@@ -66,12 +72,16 @@ public:
     int  CursorLockRequest = -1;   // -1 = no request, 0 = unlock, 1 = lock
 
 private:
-    int  LoadModule(const std::string& path);           // returns registry ref or -1
+    int  LoadModule(const std::string& path);           // returns registry ref or -1 (cached)
+    int  CompileModule(const std::string& path);        // fresh compile, not cached
+    long long FileStamp(const std::string& path) const;
     bool CallMethod(int instanceRef, const char* method, int nargs, EntityID entityForErrors);
 
     lua_State* m_L = nullptr;
     Scene*     m_Scene = nullptr;
     std::unordered_map<std::string, int> m_Modules;      // path -> registry ref of script table
+    std::unordered_map<std::string, long long> m_Stamps; // path -> file timestamp when loaded
+    float m_ReloadTimer = 0.0f;
     std::vector<std::string> m_Errors;
 };
 

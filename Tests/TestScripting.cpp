@@ -162,3 +162,31 @@ LAPIS_TEST(Luau, FileLibrarySandboxed) {
     CHECK(!se.RunString("File.Write('/tmp/escape.txt', 'x')"));
     CHECK(!se.RunString("File.Read('C:/Windows/win.ini')"));
 }
+
+LAPIS_TEST(Luau, HotReload) {
+    const std::string dir = TempDir();
+    WriteScript(dir, "Hot.luau", "local H = {} function H:OnUpdate(dt) self.Entity.Name = 'v1' end return H");
+    Scene scene;
+    scene.SetAssetRoot(dir);
+    Entity e = scene.CreateEntity("E");
+    e.Add<LuauScriptComponent>().ScriptPath = "Hot.luau";
+    scene.OnStart();
+    scene.OnUpdate(0.1f);
+    CHECK(e.GetName() == "v1");
+
+    // Simulate saving the file from an external editor (bump the timestamp).
+    WriteScript(dir, "Hot.luau", "local H = {} function H:OnUpdate(dt) self.Entity.Name = 'v2' end return H");
+    const auto p = std::filesystem::path(dir) / "Hot.luau";
+    std::filesystem::last_write_time(p, std::filesystem::last_write_time(p) + std::chrono::seconds(5));
+    CHECK(scene.GetScripts().ReloadChangedScripts() == 1);
+    scene.OnUpdate(0.1f);
+    CHECK(e.GetName() == "v2");
+
+    // A broken save keeps the old version running.
+    WriteScript(dir, "Hot.luau", "local H = {  -- syntax error");
+    std::filesystem::last_write_time(p, std::filesystem::last_write_time(p) + std::chrono::seconds(10));
+    CHECK(scene.GetScripts().ReloadChangedScripts() == 0);
+    e.Get<NameComponent>().Name = "x";
+    scene.OnUpdate(0.1f);
+    CHECK(e.GetName() == "v2");
+}

@@ -629,11 +629,15 @@ bool ScriptEngine::RunFile(const std::string& path) {
     return RunString(*src, "@" + path);
 }
 
-int ScriptEngine::LoadModule(const std::string& path) {
-    if (auto it = m_Modules.find(path); it != m_Modules.end()) return it->second;
+long long ScriptEngine::FileStamp(const std::string& path) const {
+    std::error_code ec;
+    const auto t = std::filesystem::last_write_time(m_Scene->GetAssets().Resolve(path), ec);
+    return ec ? 0 : (long long)t.time_since_epoch().count();
+}
 
+int ScriptEngine::CompileModule(const std::string& path) {
     auto src = m_Scene->GetAssets().ReadText(path);
-    if (!src) { ReportError("cannot read script '" + path + "'"); m_Modules[path] = -1; return -1; }
+    if (!src) { ReportError("cannot read script '" + path + "'"); return -1; }
 
     size_t size = 0;
     char* bytecode = luau_compile(src->data(), src->size(), nullptr, &size);
@@ -654,8 +658,60 @@ int ScriptEngine::LoadModule(const std::string& path) {
         ref = lua_ref(T, -1);
     }
     lua_pop(m_L, 1); // thread
+    return ref;
+}
+
+int ScriptEngine::LoadModule(const std::string& path) {
+    if (auto it = m_Modules.find(path); it != m_Modules.end()) return it->second;
+    m_Stamps[path] = FileStamp(path);
+    const int ref = CompileModule(path);
     m_Modules[path] = ref;
     return ref;
+}
+
+int ScriptEngine::ReloadChangedScripts() {
+    int reloaded = 0;
+    for (auto& [path, ref] : m_Modules) {
+        const long long stamp = FileStamp(path);
+        if (stamp == 0 || stamp == m_Stamps[path]) continue;
+        m_Stamps[path] = stamp;
+
+        const int fresh = CompileModule(path);
+        if (fresh < 0) { LAPIS_WARN("[Luau] hot reload of '{}' failed - keeping the previous version", path); continue; }
+
+        if (ref < 0) {
+            // The script was broken before: use it now and let entities start again.
+            ref = fresh;
+            const std::string scriptPath = path; // (structured bindings can't be captured in C++17)
+            m_Scene->GetRegistry().Each<LuauScriptComponent>([&](EntityID, LuauScriptComponent& sc) {
+                if (sc.ScriptPath == scriptPath && sc.Failed) { sc.Failed = false; sc.Started = false; }
+            });
+        } else {
+            // Replace the contents of the existing module table in place, so
+            // every running instance (whose __index is that table) sees the
+            // new functions/defaults while keeping its own state on `self`.
+            lua_getref(m_L, ref);                       // old
+            std::vector<std::string> keys;
+            lua_pushnil(m_L);
+            while (lua_next(m_L, -2)) {
+                if (lua_type(m_L, -2) == LUA_TSTRING) keys.emplace_back(lua_tostring(m_L, -2));
+                lua_pop(m_L, 1);
+            }
+            for (const auto& k : keys) { lua_pushnil(m_L); lua_setfield(m_L, -2, k.c_str()); }
+            lua_getref(m_L, fresh);                     // old, new
+            lua_pushnil(m_L);
+            while (lua_next(m_L, -2)) {                 // old, new, key, value
+                lua_pushvalue(m_L, -2);                 // old, new, key, value, key
+                lua_insert(m_L, -2);                    // old, new, key, key, value
+                lua_settable(m_L, -5);                  // old[key] = value
+            }
+            lua_pop(m_L, 2);
+            lua_unref(m_L, fresh);
+        }
+        ++reloaded;
+        LAPIS_INFO("[Luau] hot-reloaded '{}'", path);
+    }
+    return reloaded;
 }
 
 bool ScriptEngine::CallMethod(int instanceRef, const char* method, int nargs, EntityID entity) {
@@ -699,6 +755,11 @@ void ScriptEngine::StartEntity(EntityID id) {
 }
 
 void ScriptEngine::UpdateEntities(float dt) {
+    m_ReloadTimer += dt;
+    if (HotReloadEnabled && m_ReloadTimer >= 0.5f) {
+        m_ReloadTimer = 0.0f;
+        ReloadChangedScripts();
+    }
     m_Scene->GetRegistry().Each<LuauScriptComponent>([&](EntityID id, LuauScriptComponent& sc) {
         if (!sc.Started) StartEntity(id);
         auto* live = m_Scene->GetRegistry().TryGet<LuauScriptComponent>(id); // StartEntity may reallocate

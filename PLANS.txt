@@ -157,7 +157,7 @@ PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 [x] LuauScript component: per-entity script with OnStart/OnUpdate/OnDestroy
 [x] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time
 [x] Script sandboxing (no os/io access) + per-script environments
-[ ] Hot-reload scripts on file change
+[x] Hot-reload scripts on file change (running instances keep their state)
 [x] File library: sandboxed read/write/append/list inside the game's Saved/ folder
 [x] Perf library: FPS, frame/physics/script/render ms, draws, tris, bodies, contacts
 
@@ -219,7 +219,7 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [x] File > Export Game: package to Export/<Game>/<Game>.exe from the editor
 [x] LapisEditor.bat: one double-click builds (first time) and opens the editor
 [ ] Built-in code editor for Luau scripts (syntax highlighting, errors inline)
-[ ] External editor support: open scripts in VS Code, auto-reload on save
+[x] External editor support: open scripts in VS Code, auto-reload on save
     (file watcher -> hot-reload changed scripts while the editor is running)
 [ ] Viewport gizmos (move / rotate / scale) and mouse picking
 [ ] Undo / redo

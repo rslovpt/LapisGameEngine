@@ -205,6 +205,10 @@ private:
             if (ui.MenuItem("Settings...")) m_ShowSettings = !m_ShowSettings;
             if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Project.Directory.empty() && !m_Export.Running)) ExportGame();
             if (ui.MenuItem("Open Project Folder", "", false, !m_Project.Directory.empty())) LapisApp::OpenInShell(m_Project.Directory);
+            if (ui.MenuItem("Open Project in VS Code", "", false, !m_Project.Directory.empty())) {
+                LapisApp::OpenInVSCode(m_Project.Directory);
+                m_Status = "Opened in VS Code - saved scripts hot-reload while playing";
+            }
             ui.MenuSeparator();
             if (ui.MenuItem("Exit", "Alt+F4")) Quit();
             ui.EndMenu();
@@ -318,7 +322,9 @@ private:
         if (e.Has<CameraComponent>()) ui.Label("  Camera");
         if (auto* sc = e.TryGet<LuauScriptComponent>()) {
             ui.Label("  Luau Script: " + sc->ScriptPath);
-            if (ui.Button("Open script in external editor")) LapisApp::OpenInShell(m_Project.Path(sc->ScriptPath));
+            if (ui.Button("Edit in VS Code")) LapisApp::OpenInVSCode(m_Project.Path(sc->ScriptPath));
+            ui.SameLine();
+            if (ui.Button("Open with default app")) LapisApp::OpenInShell(m_Project.Path(sc->ScriptPath));
         }
         ui.Spacing(6);
         if (ui.Button("Duplicate")) DuplicateSelected();

@@ -102,6 +102,23 @@ inline void OpenInShell(const std::string& path) {
 #endif
 }
 
+// Opens a folder or file in Visual Studio Code (the `code` command that VS
+// Code installs on PATH). Falls back to the default handler.
+inline void OpenInVSCode(const std::string& path) {
+#if defined(_WIN32)
+    const std::string args = "/c code \"" + path + "\"";
+    const int n = MultiByteToWideChar(CP_UTF8, 0, args.c_str(), -1, nullptr, 0);
+    std::wstring w(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, args.c_str(), -1, w.data(), n);
+    const auto result = (INT_PTR)ShellExecuteW(nullptr, L"open", L"cmd.exe", w.c_str(), nullptr, SW_HIDE);
+    if (result <= 32) OpenInShell(path);
+#else
+    if (std::getenv("LAPIS_NO_SHELL_OPEN")) return;
+    const std::string cmd = "code '" + path + "' >/dev/null 2>&1 || xdg-open '" + path + "' >/dev/null 2>&1 &";
+    [[maybe_unused]] int r = std::system(cmd.c_str());
+#endif
+}
+
 inline void SetEnv(const char* name, const char* value) {
 #if defined(_WIN32)
     _putenv_s(name, value);
