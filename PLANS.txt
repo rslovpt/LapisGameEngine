@@ -204,7 +204,14 @@ PHASE 8e - Stress tests & optimization
 [x] Render interpolation between fixed physics steps (no stutter at any Hz)
 [x] Instanced rendering for repeated meshes (draw-call bound scenes)
 [x] Physics broadphase: spatial hash / BVH instead of 1-axis sweep
-[ ] Multithreaded physics + job system
+[ ] Job system (worker thread pool, automatic: uses all CPU cores by default)
+[ ] Automatic multithreading: physics narrow phase + solver islands, transform
+    updates, frustum culling / batch building, asset loading in parallel
+[ ] Luau Actors (like Roblox Parallel Luau): scripts under an Actor run on
+    worker threads in their own VMs; ConnectParallel-style OnUpdateParallel,
+    task.synchronize()/desynchronize() equivalents for safe scene writes
+[ ] Manual control: project settings (thread count, which systems run in
+    parallel) + a script API to schedule your own parallel jobs
 [ ] GPU timing queries (real GPU ms, not just CPU submit time)
 
 ------------------------------------------------------------------------------
