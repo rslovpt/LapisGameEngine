@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <exception>
 #include <functional>
 #include <string>
 #include <vector>
@@ -26,22 +27,44 @@ struct Registrar {
     }
 };
 
+// Optional text sink so tools (LapisDiagnostics) can capture results.
+inline std::string*& ReportSink() { static std::string* sink = nullptr; return sink; }
+
+inline void Emit(const std::string& line) {
+    std::printf("%s\n", line.c_str());
+    if (ReportSink()) *ReportSink() += line + "\n";
+}
+
 inline void ReportFailure(const char* file, int line, const std::string& what) {
-    std::printf("    FAILED %s:%d: %s\n", file, line, what.c_str());
+    std::string f = file;
+    const size_t slash = f.find_last_of("/\\");
+    if (slash != std::string::npos) f = f.substr(slash + 1);
+    Emit("    FAILED " + f + ":" + std::to_string(line) + ": " + what);
     ++FailureCount();
 }
 
-inline int RunAll() {
-    int failedTests = 0;
+struct Summary { int Total = 0, Failed = 0; };
+
+inline Summary RunAll(std::string* report = nullptr) {
+    ReportSink() = report;
+    Summary s;
     for (const TestCase& t : Registry()) {
         const int before = FailureCount();
-        t.Fn();
+        try {
+            t.Fn();
+        } catch (const std::exception& e) {
+            ReportFailure(t.Suite, 0, std::string("uncaught exception: ") + e.what());
+        } catch (...) {
+            ReportFailure(t.Suite, 0, "uncaught unknown exception");
+        }
         const bool ok = FailureCount() == before;
-        if (!ok) ++failedTests;
-        std::printf("[%s] %s.%s\n", ok ? " OK " : "FAIL", t.Suite, t.Name);
+        ++s.Total;
+        if (!ok) ++s.Failed;
+        Emit(std::string("[") + (ok ? " OK " : "FAIL") + "] " + t.Suite + "." + t.Name);
     }
-    std::printf("\n%zu tests, %d failed\n", Registry().size(), failedTests);
-    return failedTests == 0 ? 0 : 1;
+    Emit("\n" + std::to_string(s.Total) + " tests, " + std::to_string(s.Failed) + " failed");
+    ReportSink() = nullptr;
+    return s;
 }
 
 } // namespace LapisTest

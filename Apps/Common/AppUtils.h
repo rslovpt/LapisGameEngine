@@ -1,0 +1,98 @@
+#pragma once
+// Small helpers shared by the Lapis executables (player, packager, diagnostics).
+
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#include "Lapis/Core/FileSystem.h"
+
+#if defined(_WIN32)
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <windows.h>
+#endif
+
+namespace LapisApp {
+
+struct Args {
+    std::vector<std::string> List;
+    Args(int argc, char** argv) { for (int i = 1; i < argc; ++i) List.emplace_back(argv[i]); }
+
+    bool Has(const std::string& flag) const {
+        for (const auto& a : List) if (a == flag) return true;
+        return false;
+    }
+    std::string Value(const std::string& flag, const std::string& def = "") const {
+        for (size_t i = 0; i + 1 < List.size(); ++i) if (List[i] == flag) return List[i + 1];
+        return def;
+    }
+    // Positional arguments (anything not starting with "--" and not a flag value).
+    std::vector<std::string> Positional(const std::vector<std::string>& flagsWithValues) const {
+        std::vector<std::string> out;
+        for (size_t i = 0; i < List.size(); ++i) {
+            const std::string& a = List[i];
+            if (a.rfind("--", 0) == 0) {
+                for (const auto& f : flagsWithValues) if (a == f) { ++i; break; }
+                continue;
+            }
+            out.push_back(a);
+        }
+        return out;
+    }
+};
+
+inline std::string ExeDir() { return Lapis::FileSystem::ExecutableDirectory(); }
+
+inline bool HasProject(const std::filesystem::path& dir) {
+    std::error_code ec;
+    return std::filesystem::exists(dir / "project.lapis", ec);
+}
+
+// Finds a project: explicit path > packaged "Content" next to the exe >
+// the repository's Projects/Sandbox (for development builds).
+inline std::string FindProject(const std::string& explicitPath) {
+    namespace fs = std::filesystem;
+    if (!explicitPath.empty()) return explicitPath;
+    const fs::path exe = ExeDir();
+    if (HasProject(exe / "Content")) return (exe / "Content").string();
+    for (const char* rel : {"../Projects/Sandbox", "../../Projects/Sandbox", "../../../Projects/Sandbox", "Projects/Sandbox"}) {
+        const fs::path p = (exe / rel).lexically_normal();
+        if (HasProject(p)) return p.string();
+    }
+    return {};
+}
+
+inline void ShowError(const std::string& title, const std::string& message) {
+    std::fprintf(stderr, "%s: %s\n", title.c_str(), message.c_str());
+#if defined(_WIN32)
+    MessageBoxA(nullptr, message.c_str(), title.c_str(), MB_OK | MB_ICONERROR);
+#endif
+}
+
+// GUI-subsystem executables have no console; --console attaches one.
+inline void AttachConsole() {
+#if defined(_WIN32)
+    if (AllocConsole()) {
+        FILE* f = nullptr;
+        freopen_s(&f, "CONOUT$", "w", stdout);
+        freopen_s(&f, "CONOUT$", "w", stderr);
+    }
+#endif
+}
+
+inline void SetEnv(const char* name, const char* value) {
+#if defined(_WIN32)
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+}
+
+} // namespace LapisApp

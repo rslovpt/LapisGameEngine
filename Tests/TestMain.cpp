@@ -4,5 +4,5 @@
 
 int main() {
     Lapis::Log::SetLevel(Lapis::LogLevel::Fatal); // tests trigger errors on purpose
-    return LapisTest::RunAll();
+    return LapisTest::RunAll().Failed == 0 ? 0 : 1;
 }

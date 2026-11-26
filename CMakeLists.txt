@@ -13,8 +13,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
-option(LAPIS_BUILD_SANDBOX "Build the Sandbox demo game" ON)
-option(LAPIS_BUILD_TESTS   "Build the unit / render tests" ON)
 
 # Put every executable and library in one place so the Sandbox can find
 # its Assets folder relative to the executable.
@@ -35,15 +33,7 @@ endfunction()
 add_subdirectory(ThirdParty/luau)
 add_subdirectory(Engine)
 
-if(LAPIS_BUILD_SANDBOX)
-    if(WIN32)
-        add_subdirectory(Sandbox)
-    else()
-        message(STATUS "Lapis: Sandbox needs a window backend; only Win32 exists so far - skipping on this platform.")
-    endif()
-endif()
-
-if(LAPIS_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(Tests)
-endif()
+# Test cases are shared with LapisDiagnostics, so they are always configured.
+enable_testing()
+add_subdirectory(Tests)
+add_subdirectory(Apps)
