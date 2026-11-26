@@ -1,6 +1,7 @@
 #include "Lapis/Physics/PhysicsWorld.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 namespace Lapis {
 
@@ -141,50 +142,122 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
     }
     for (Body& b : bodies) b.Bounds = ColliderWorldAABB(*b.Transform, *b.Collider);
 
-    // 3. Broad + narrow phase (sorted sweep along X).
-    std::vector<int> order(bodies.size());
-    for (size_t i = 0; i < order.size(); ++i) order[i] = (int)i;
-    std::sort(order.begin(), order.end(), [&](int a, int b) { return bodies[a].Bounds.Min.x < bodies[b].Bounds.Min.x; });
+    // 3. Broad phase: uniform spatial hash. Cell size follows the typical
+    //    body size; very large bodies (ground, walls) go to a separate list
+    //    that is tested against everything instead of filling many cells.
+    std::vector<int> candidatesA, candidatesB;
+    {
+        std::vector<float> sizes;
+        sizes.reserve(bodies.size());
+        for (const Body& b : bodies) if (b.Moves()) { const Vec3 e = b.Bounds.Size(); sizes.push_back(std::max(e.x, std::max(e.y, e.z))); }
+        float cell = 2.0f;
+        if (!sizes.empty()) {
+            std::nth_element(sizes.begin(), sizes.begin() + sizes.size() / 2, sizes.end());
+            cell = Clamp(sizes[sizes.size() / 2] * 2.0f, 0.25f, 16.0f);
+        }
+        const float inv = 1.0f / cell;
 
+        // Each small body is written into every cell its AABB touches as a
+        // (cell key, body) entry; sorting the entries groups bodies per cell
+        // without any hash map allocations.
+        struct Range { int X0, Y0, Z0, X1, Y1, Z1; };
+        std::vector<Range> ranges(bodies.size());
+        struct Entry { u64 Key; int Body; };
+        std::vector<Entry> entries;
+        entries.reserve(bodies.size() * 2);
+        std::vector<int> large;
+        auto cellKey = [](int x, int y, int z) -> u64 {
+            return (u64(u32(x + 0xFFFFF) & 0x1FFFFF) << 42) | (u64(u32(y + 0xFFFFF) & 0x1FFFFF) << 21) | u64(u32(z + 0xFFFFF) & 0x1FFFFF);
+        };
+        for (int i = 0; i < (int)bodies.size(); ++i) {
+            const AABB& bb = bodies[i].Bounds;
+            Range& r = ranges[i];
+            r = {(int)std::floor(bb.Min.x * inv), (int)std::floor(bb.Min.y * inv), (int)std::floor(bb.Min.z * inv),
+                 (int)std::floor(bb.Max.x * inv), (int)std::floor(bb.Max.y * inv), (int)std::floor(bb.Max.z * inv)};
+            if ((long long)(r.X1 - r.X0 + 1) * (r.Y1 - r.Y0 + 1) * (r.Z1 - r.Z0 + 1) > 27) { large.push_back(i); continue; }
+            for (int x = r.X0; x <= r.X1; ++x)
+                for (int y = r.Y0; y <= r.Y1; ++y)
+                    for (int z = r.Z0; z <= r.Z1; ++z) entries.push_back({cellKey(x, y, z), i});
+        }
+        std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) { return a.Key < b.Key; });
+
+        for (size_t start = 0; start < entries.size();) {
+            size_t end = start + 1;
+            while (end < entries.size() && entries[end].Key == entries[start].Key) ++end;
+            for (size_t m = start; m < end; ++m) {
+                const int i = entries[m].Body;
+                for (size_t n = m + 1; n < end; ++n) {
+                    const int j = entries[n].Body;
+                    // Report each pair only once: from the first cell (lowest
+                    // corner) of the overlap of their cell ranges.
+                    const Range& ri = ranges[i];
+                    const Range& rj = ranges[j];
+                    const u64 first = cellKey(std::max(ri.X0, rj.X0), std::max(ri.Y0, rj.Y0), std::max(ri.Z0, rj.Z0));
+                    if (first != entries[m].Key) continue;
+                    candidatesA.push_back(i);
+                    candidatesB.push_back(j);
+                }
+            }
+            start = end;
+        }
+        for (size_t l = 0; l < large.size(); ++l) {
+            for (int i = 0; i < (int)bodies.size(); ++i) {
+                if (i == large[l]) continue;
+                // large-vs-large pairs only once
+                if (std::find(large.begin(), large.begin() + l, i) != large.begin() + l) continue;
+                if (!bodies[large[l]].Moves() && !bodies[i].Moves()) continue;
+                if (!bodies[large[l]].Bounds.Intersects(bodies[i].Bounds)) continue;
+                candidatesA.push_back(large[l]);
+                candidatesB.push_back(i);
+            }
+        }
+    }
+
+    // 4. Narrow phase.
     std::vector<Contact> contacts;
     std::unordered_set<u64> pairs;
-    for (size_t oi = 0; oi < order.size(); ++oi) {
-        Body& a = bodies[order[oi]];
-        for (size_t oj = oi + 1; oj < order.size(); ++oj) {
-            Body& b = bodies[order[oj]];
-            if (b.Bounds.Min.x > a.Bounds.Max.x) break;
-            if (!a.Moves() && !b.Moves()) continue;
-            if (!a.Bounds.Intersects(b.Bounds)) continue;
-
-            Vec3 n; float pen = 0.0f;
-            if (!Collide(a, b, n, pen)) continue;
-
-            const u64 key = PairKey(a.ID, b.ID);
-            pairs.insert(key);
-            const bool trigger = a.Collider->IsTrigger || b.Collider->IsTrigger;
-            if (!m_PrevPairs.count(key)) m_BeginEvents.push_back({a.ID, b.ID, n, trigger});
-            if (trigger) continue;
-
-            const float restA = a.RB ? a.RB->Restitution : 0.0f, restB = b.RB ? b.RB->Restitution : 0.0f;
-            const float fricA = a.RB ? a.RB->Friction : 0.6f, fricB = b.RB ? b.RB->Friction : 0.6f;
-            Contact c{order[oi], order[oj], n, pen, std::max(restA, restB), std::sqrt(fricA * fricB)};
-
-            // Restitution target, computed once from the pre-solve velocity.
-            const float vn = Dot(b.Velocity() - a.Velocity(), n);
-            c.TargetNormalVelocity = vn < -1.0f ? -c.Restitution * vn : 0.0f;
-
-            // Moving bodies wake sleeping ones they hit.
-            const bool aAwake = a.RB && !a.RB->Sleeping && a.Moves();
-            const bool bAwake = b.RB && !b.RB->Sleeping && b.Moves();
-            if (aAwake && LengthSq(a.Velocity()) > 0.25f) Wake(b);
-            if (bAwake && LengthSq(b.Velocity()) > 0.25f) Wake(a);
-            contacts.push_back(c);
+    for (size_t c = 0; c < candidatesA.size(); ++c) {
+        Body& a = bodies[candidatesA[c]];
+        Body& b = bodies[candidatesB[c]];
+        if (!a.Moves() && !b.Moves()) continue;
+        const u64 key = PairKey(a.ID, b.ID);
+        // Resting contacts between sleeping bodies (or sleeping vs static) need
+        // no work; remember the pair so waking up doesn't fire a new event.
+        const bool aRest = !a.Moves() || (a.RB && a.RB->Sleeping);
+        const bool bRest = !b.Moves() || (b.RB && b.RB->Sleeping);
+        if (aRest && bRest) {
+            if (m_PrevPairs.count(key)) pairs.insert(key);
+            continue;
         }
+        if (!a.Bounds.Intersects(b.Bounds)) continue;
+
+        Vec3 n; float pen = 0.0f;
+        if (!Collide(a, b, n, pen)) continue;
+
+        pairs.insert(key);
+        const bool trigger = a.Collider->IsTrigger || b.Collider->IsTrigger;
+        if (!m_PrevPairs.count(key)) m_BeginEvents.push_back({a.ID, b.ID, n, trigger});
+        if (trigger) continue;
+
+        const float restA = a.RB ? a.RB->Restitution : 0.0f, restB = b.RB ? b.RB->Restitution : 0.0f;
+        const float fricA = a.RB ? a.RB->Friction : 0.6f, fricB = b.RB ? b.RB->Friction : 0.6f;
+        Contact ct{candidatesA[c], candidatesB[c], n, pen, std::max(restA, restB), std::sqrt(fricA * fricB)};
+
+        // Restitution target, computed once from the pre-solve velocity.
+        const float vn = Dot(b.Velocity() - a.Velocity(), n);
+        ct.TargetNormalVelocity = vn < -1.0f ? -ct.Restitution * vn : 0.0f;
+
+        // Moving bodies wake sleeping ones they hit.
+        const bool aAwake = a.RB && !a.RB->Sleeping && a.Moves();
+        const bool bAwake = b.RB && !b.RB->Sleeping && b.Moves();
+        if (aAwake && LengthSq(a.Velocity()) > 0.25f) Wake(b);
+        if (bAwake && LengthSq(b.Velocity()) > 0.25f) Wake(a);
+        contacts.push_back(ct);
     }
     m_PrevPairs = std::move(pairs);
     m_ContactCount = contacts.size();
 
-    // 4. Sequential impulse solver.
+    // 5. Sequential impulse solver.
     for (int iter = 0; iter < Settings.SolverIterations; ++iter) {
         for (Contact& c : contacts) {
             Body& a = bodies[c.A];
@@ -219,13 +292,13 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         }
     }
 
-    // 5. Integrate velocities -> positions.
+    // 6. Integrate velocities -> positions.
     for (Body& b : bodies) {
         if (!b.Moves() || b.RB->Sleeping) continue;
         b.Transform->Position += b.RB->Velocity * dt;
     }
 
-    // 6. Positional correction (prevents sinking / stacking drift).
+    // 7. Positional correction (prevents sinking / stacking drift).
     for (const Contact& c : contacts) {
         Body& a = bodies[c.A];
         Body& b = bodies[c.B];
@@ -237,7 +310,7 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         if (b.InvMass > 0.0f) b.Transform->Position += corr * b.InvMass;
     }
 
-    // 7. Sleeping.
+    // 8. Sleeping.
     for (Body& b : bodies) {
         if (!b.RB || b.RB->Type != BodyType::Dynamic || b.RB->Sleeping) continue;
         if (Length(b.RB->Velocity) < Settings.SleepVelocity) {

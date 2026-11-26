@@ -125,3 +125,34 @@ LAPIS_TEST(Physics, RaycastAndEvents) {
     for (int i = 0; i < 120; ++i) { s2.OnFixedUpdate(1.0f / 60.0f); begins += (int)s2.GetPhysics().GetBeginEvents().size(); }
     CHECK(begins == 1);
 }
+
+LAPIS_TEST(Physics, BroadphaseFindsAllPairs) {
+    // Spatial-hash broadphase must find exactly the pairs a brute-force
+    // check finds (mixed sizes, including bodies spanning many cells).
+    Scene s;
+    s.GetPhysics().Settings.Gravity = Vec3(0.0f);
+    std::vector<Entity> boxes;
+    u32 seed = 12345;
+    auto rnd = [&] { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / 16777216.0f; };
+    for (int i = 0; i < 300; ++i) {
+        Entity e = s.CreateEntity("b");
+        e.Transform().Position = {(rnd() - 0.5f) * 20, (rnd() - 0.5f) * 6, (rnd() - 0.5f) * 20};
+        const float big = i % 50 == 0 ? 12.0f : 1.0f;
+        e.Transform().Scale = Vec3(0.4f + rnd() * 1.6f) * big;
+        e.Add<ColliderComponent>();
+        e.Add<RigidBodyComponent>().LinearDamping = 0.0f;
+        boxes.push_back(e);
+    }
+    size_t expected = 0;
+    for (size_t i = 0; i < boxes.size(); ++i)
+        for (size_t j = i + 1; j < boxes.size(); ++j) {
+            const AABB a = ColliderWorldAABB(boxes[i].Transform(), boxes[i].Get<ColliderComponent>());
+            const AABB b = ColliderWorldAABB(boxes[j].Transform(), boxes[j].Get<ColliderComponent>());
+            Vec3 overlap = (a.Extents() + b.Extents()) - Abs(b.Center() - a.Center());
+            if (overlap.x > 0 && overlap.y > 0 && overlap.z > 0) ++expected;
+        }
+    s.OnStart();
+    s.GetPhysics().Step(s.GetRegistry(), 1e-6f);
+    CHECK(s.GetPhysics().GetContactCount() == expected);
+    CHECK(expected > 50); // the test actually exercises overlaps
+}

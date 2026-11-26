@@ -128,7 +128,7 @@ PHASE 6 - Physics
 [x] Fixed timestep integration
 [x] Unit tests for physics
 [ ] Oriented boxes (SAT), capsules, mesh colliders
-[ ] Broadphase acceleration (spatial hash / BVH)
+[x] Broadphase acceleration (spatial hash / BVH)
 [ ] Joints / constraints
 
 ------------------------------------------------------------------------------
@@ -184,7 +184,7 @@ PHASE 8e - Stress tests & optimization
     Build.bat to Export/StressTest_*), CSV + summary logs in Saved/
 [x] Render interpolation between fixed physics steps (no stutter at any Hz)
 [x] Instanced rendering for repeated meshes (draw-call bound scenes)
-[ ] Physics broadphase: spatial hash / BVH instead of 1-axis sweep
+[x] Physics broadphase: spatial hash / BVH instead of 1-axis sweep
 [ ] Multithreaded physics + job system
 [ ] GPU timing queries (real GPU ms, not just CPU submit time)
 
