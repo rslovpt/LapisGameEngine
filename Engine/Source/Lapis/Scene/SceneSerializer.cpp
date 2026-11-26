@@ -139,7 +139,7 @@ std::string Serialize(Scene& scene) {
         if (auto* mr = e.TryGet<MeshRendererComponent>()) {
             o << "  MeshRenderer mesh=" << Quote(mr->MeshName.empty() && mr->MeshAsset ? mr->MeshAsset->GetName() : mr->MeshName);
             if (const Material* m = mr->MaterialAsset.get()) {
-                o << " color=" << V4(m->Albedo) << " roughness=" << Num(m->Roughness) << " metallic=" << Num(m->Metallic)
+                o << " color=" << V4(m->Albedo * mr->Tint) << " roughness=" << Num(m->Roughness) << " metallic=" << Num(m->Metallic)
                   << " emissive=" << V3(m->Emissive) << " tiling=" << Num(m->Tiling.x) << "," << Num(m->Tiling.y)
                   << " unlit=" << (m->Unlit ? 1 : 0) << " shadows=" << (m->CastShadows ? 1 : 0);
                 if (m->AlbedoMap && !m->AlbedoMap->GetPath().empty()) o << " texture=" << Quote(m->AlbedoMap->GetPath());
@@ -238,19 +238,23 @@ bool Deserialize(Scene& scene, const std::string& text, std::string* error, bool
             auto& mr = current.Add<MeshRendererComponent>();
             mr.MeshName = l.Str("mesh", "Cube");
             mr.Visible = l.B("visible", true);
-            auto mat = CreateRef<Material>();
-            mat->Albedo = l.V4("color", mat->Albedo);
-            mat->Roughness = l.F("roughness", mat->Roughness);
-            mat->Metallic = l.F("metallic", mat->Metallic);
-            mat->Emissive = l.V3("emissive", mat->Emissive);
-            mat->Tiling = l.V2("tiling", mat->Tiling);
-            mat->Unlit = l.B("unlit", false);
-            mat->CastShadows = l.B("shadows", true);
+            // Objects with identical material settings share one material (and
+            // batch into instanced draws); the color becomes the per-object tint.
+            mr.Tint = l.V4("color", Vec4(1.0f));
+            const std::string texture = l.Str("texture", "");
+            const float roughness = l.F("roughness", 0.5f), metallic = l.F("metallic", 0.0f);
+            const Vec3 emissive = l.V3("emissive", Vec3(0.0f));
+            const Vec2 tiling = l.V2("tiling", Vec2(1.0f));
+            const bool unlit = l.B("unlit", false), shadows = l.B("shadows", true);
             if (loadAssets) {
                 mr.MeshAsset = scene.GetAssets().GetMesh(mr.MeshName);
-                if (l.Has("texture")) mat->AlbedoMap = scene.GetAssets().GetTexture(l.Str("texture"));
+                mr.MaterialAsset = scene.GetAssets().GetSharedMaterial(texture, roughness, metallic, emissive, tiling, unlit, shadows);
+            } else {
+                auto mat = CreateRef<Material>();
+                mat->Roughness = roughness; mat->Metallic = metallic; mat->Emissive = emissive;
+                mat->Tiling = tiling; mat->Unlit = unlit; mat->CastShadows = shadows;
+                mr.MaterialAsset = mat;
             }
-            mr.MaterialAsset = mat;
         } else if (l.Tag == "Collider") {
             auto& c = current.Add<ColliderComponent>();
             c.Shape = l.Str("shape", "Box") == "Sphere" ? ColliderShape::Sphere : ColliderShape::Box;

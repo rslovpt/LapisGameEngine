@@ -52,6 +52,7 @@ struct ShadowSettings {
 struct RenderStats {
     u32 DrawCalls = 0;
     u32 Triangles = 0;
+    u32 Instances = 0;      // objects drawn in the main pass
     u32 Submitted = 0;
     u32 Culled = 0;
     u32 PointLights = 0;
@@ -66,7 +67,7 @@ public:
     void BeginFrame(const CameraView& camera, const Environment& env = {});
     void SetDirectionalLight(const DirectionalLight& light) { m_Sun = light; }
     void AddPointLight(const PointLight& light);
-    void Submit(const Ref<Mesh>& mesh, const Ref<Material>& material, const Mat4& transform);
+    void Submit(const Ref<Mesh>& mesh, const Ref<Material>& material, const Mat4& transform, const Vec4& tint = Vec4(1.0f));
     void EndFrame(u32 targetFBO);
 
     // Debug drawing (cleared every frame).
@@ -87,6 +88,7 @@ private:
         Mesh*     MeshPtr;
         Material* MaterialPtr;
         Mat4      Transform;
+        Vec4      Tint;
         AABB      WorldBounds;
     };
     struct DebugVertex { Vec3 Position; Vec4 Color; };
@@ -107,6 +109,13 @@ private:
     Scope<VertexArray> m_EmptyVAO;       // for fullscreen triangles
     Scope<VertexArray> m_LineVAO;
     Ref<VertexBuffer>  m_LineVBO;
+    Ref<VertexBuffer>  m_InstanceVBO, m_ShadowInstanceVBO;
+    struct InstanceData { Mat4 Model; Vec4 Tint; };
+    std::vector<InstanceData> m_InstanceData;
+
+    // Consecutive draw items with the same mesh+material become one instanced draw.
+    struct Batch { Mesh* MeshPtr; Material* MaterialPtr; size_t First; u32 Count; };
+    void BuildBatches(const std::vector<const DrawItem*>& items, std::vector<Batch>& out, VertexBuffer& buffer);
     Ref<Texture2D>     m_White;
 
     CameraView        m_Camera;

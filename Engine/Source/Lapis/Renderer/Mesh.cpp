@@ -32,6 +32,20 @@ Mesh::Mesh(const MeshData& data, const std::string& name)
     m_VAO->SetIndexBuffer(CreateRef<IndexBuffer>(data.Indices.data(), m_IndexCount));
 }
 
+void Mesh::DrawInstanced(u32 instanceBuffer, size_t offset, u32 count) const {
+    m_VAO->Bind();
+    glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);
+    // Per instance: mat4 model (locations 3-6) + vec4 tint (location 7).
+    constexpr GLsizei stride = sizeof(Mat4) + sizeof(Vec4);
+    for (GLuint i = 0; i < 5; ++i) {
+        const GLuint loc = 3 + i;
+        glEnableVertexAttribArray(loc);
+        glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(offset + i * sizeof(Vec4)));
+        glVertexAttribDivisor(loc, 1);
+    }
+    glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)m_IndexCount, GL_UNSIGNED_INT, nullptr, (GLsizei)count);
+}
+
 void Mesh::Draw() const {
     m_VAO->Bind();
     glDrawElements(GL_TRIANGLES, (GLsizei)m_IndexCount, GL_UNSIGNED_INT, nullptr);

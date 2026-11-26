@@ -13,9 +13,9 @@ inline const char* LitVertex = R"(
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_UV;
+layout(location = 3) in mat4 a_Model;   // per instance
+layout(location = 7) in vec4 a_Tint;    // per instance
 
-uniform mat4 u_Model;
-uniform mat4 u_NormalMatrix;
 uniform mat4 u_ViewProjection;
 uniform mat4 u_LightSpace;
 uniform vec2 u_Tiling;
@@ -24,11 +24,13 @@ out vec3 v_WorldPos;
 out vec3 v_Normal;
 out vec2 v_UV;
 out vec4 v_LightSpacePos;
+out vec4 v_Tint;
 
 void main() {
-    vec4 world = u_Model * vec4(a_Position, 1.0);
+    v_Tint = a_Tint;
+    vec4 world = a_Model * vec4(a_Position, 1.0);
     v_WorldPos = world.xyz;
-    v_Normal = mat3(u_NormalMatrix) * a_Normal;
+    v_Normal = transpose(inverse(mat3(a_Model))) * a_Normal;
     v_UV = a_UV * u_Tiling;
     v_LightSpacePos = u_LightSpace * world;
     gl_Position = u_ViewProjection * world;
@@ -50,6 +52,7 @@ in vec3 v_WorldPos;
 in vec3 v_Normal;
 in vec2 v_UV;
 in vec4 v_LightSpacePos;
+in vec4 v_Tint;
 
 uniform vec4      u_Albedo;       // sRGB
 uniform sampler2D u_AlbedoMap;    // sRGB texture (hardware linearized)
@@ -114,8 +117,8 @@ vec3 Shade(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo) {
 
 void main() {
     vec4 tex = texture(u_AlbedoMap, v_UV);
-    vec3 albedo = pow(u_Albedo.rgb, vec3(2.2)) * tex.rgb;
-    float alpha = u_Albedo.a * tex.a;
+    vec3 albedo = pow(u_Albedo.rgb * v_Tint.rgb, vec3(2.2)) * tex.rgb;
+    float alpha = u_Albedo.a * v_Tint.a * tex.a;
 
     if (u_Unlit != 0) {
         o_Color = vec4(albedo + u_Emissive, alpha);
@@ -167,9 +170,9 @@ void main() {
 inline const char* ShadowVertex = R"(
 #version 330 core
 layout(location = 0) in vec3 a_Position;
+layout(location = 3) in mat4 a_Model;   // per instance
 uniform mat4 u_LightSpace;
-uniform mat4 u_Model;
-void main() { gl_Position = u_LightSpace * u_Model * vec4(a_Position, 1.0); }
+void main() { gl_Position = u_LightSpace * a_Model * vec4(a_Position, 1.0); }
 )";
 
 inline const char* ShadowFragment = R"(

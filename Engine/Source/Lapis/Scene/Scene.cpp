@@ -254,7 +254,7 @@ void Scene::OnRender(Renderer& renderer, float aspect, const CameraView* overrid
     renderer.SetDirectionalLight(sun);
 
     registry.Each<MeshRendererComponent, TransformComponent>([&](EntityID, MeshRendererComponent& mr, TransformComponent& t) {
-        if (mr.Visible && mr.MeshAsset) renderer.Submit(mr.MeshAsset, mr.MaterialAsset, t.World);
+        if (mr.Visible && mr.MeshAsset) renderer.Submit(mr.MeshAsset, mr.MaterialAsset, t.World, mr.Tint);
     });
 
     if (DebugDrawColliders) {

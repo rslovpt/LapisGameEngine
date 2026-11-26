@@ -1,5 +1,7 @@
 #include "Lapis/Renderer/Buffer.h"
 
+#include <algorithm>
+
 #include "Lapis/Renderer/GL.h"
 
 namespace Lapis {
@@ -36,7 +38,12 @@ void VertexBuffer::Bind() const { glBindBuffer(GL_ARRAY_BUFFER, m_ID); }
 
 void VertexBuffer::SetData(const void* data, size_t size) {
     glBindBuffer(GL_ARRAY_BUFFER, m_ID);
-    if (size > m_Size) {
+    if (m_Usage == BufferUsage::Stream) {
+        // Orphan the old storage so the driver doesn't wait for the GPU.
+        m_Size = std::max(size, m_Size);
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)m_Size, nullptr, GL_STREAM_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)size, data);
+    } else if (size > m_Size) {
         glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)size, data, ToGL(m_Usage));
         m_Size = size;
     } else {

@@ -106,6 +106,9 @@ constexpr GLenum GL_DEBUG_OUTPUT = 0x92E0, GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242,
     X(void, glFinish, ())                                                                              \
     X(void, glDrawArrays, (GLenum mode, GLint first, GLsizei count))                                   \
     X(void, glDrawElements, (GLenum mode, GLsizei count, GLenum type, const void* indices))            \
+    X(void, glDrawElementsInstanced, (GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei instances)) \
+    X(void, glVertexAttribDivisor, (GLuint index, GLuint divisor))                                     \
+    X(void, glDisableVertexAttribArray, (GLuint index))                                                \
     X(void, glGenBuffers, (GLsizei n, GLuint* buffers))                                                \
     X(void, glDeleteBuffers, (GLsizei n, const GLuint* buffers))                                       \
     X(void, glBindBuffer, (GLenum target, GLuint buffer))                                              \

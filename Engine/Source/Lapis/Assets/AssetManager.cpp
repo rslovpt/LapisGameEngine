@@ -43,9 +43,30 @@ Ref<Texture2D> AssetManager::GetTexture(const std::string& name) {
     if (!tex) {
         LAPIS_ERROR("Assets: texture '{}' not found - using Checker", name);
         tex = GetTexture("Checker");
+    } else {
+        tex->SetPath(name);
     }
     m_Textures[name] = tex;
     return tex;
+}
+
+Ref<Material> AssetManager::GetSharedMaterial(const std::string& texture, float roughness, float metallic, const Vec3& emissive,
+                                              const Vec2& tiling, bool unlit, bool castShadows, float alpha) {
+    const std::string key = Format("{}|{}|{}|{},{},{}|{},{}|{}|{}|{}", texture, roughness, metallic, emissive.x, emissive.y,
+                                   emissive.z, tiling.x, tiling.y, unlit, castShadows, alpha);
+    if (auto it = m_Materials.find(key); it != m_Materials.end()) return it->second;
+    auto m = CreateRef<Material>();
+    m->Name = "Shared";
+    m->Albedo = {1, 1, 1, alpha};
+    m->Roughness = roughness;
+    m->Metallic = metallic;
+    m->Emissive = emissive;
+    m->Tiling = tiling;
+    m->Unlit = unlit;
+    m->CastShadows = castShadows;
+    if (!texture.empty()) m->AlbedoMap = GetTexture(texture);
+    m_Materials[key] = m;
+    return m;
 }
 
 std::optional<std::string> AssetManager::ReadText(const std::string& path) const {

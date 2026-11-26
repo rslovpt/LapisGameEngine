@@ -31,6 +31,9 @@ public:
     explicit Mesh(const MeshData& data, const std::string& name = "Mesh");
 
     void Draw() const;
+    // Draws `count` instances whose data {mat4 model, vec4 tint} starts at
+    // byte `offset` in `instanceBuffer` (vertex attributes 3..7).
+    void DrawInstanced(u32 instanceBuffer, size_t offset, u32 count) const;
 
     const AABB& GetBounds() const { return m_Bounds; }
     u32 GetIndexCount() const { return m_IndexCount; }

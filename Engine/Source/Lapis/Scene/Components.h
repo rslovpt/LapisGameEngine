@@ -53,6 +53,7 @@ struct MeshRendererComponent {
     Ref<Mesh>     MeshAsset;
     Ref<Material> MaterialAsset;
     std::string   MeshName;     // asset key used for serialization ("Cube", "Models/rock.obj")
+    Vec4          Tint{1.0f};   // per-object color multiplier (lets objects share a material and batch)
     bool          Visible = true;
 };
 

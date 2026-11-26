@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "Lapis/Renderer/Material.h"
 #include "Lapis/Renderer/Mesh.h"
 #include "Lapis/Renderer/Texture.h"
 
@@ -26,7 +27,13 @@ public:
     Ref<Texture2D> GetTexture(const std::string& name);
     std::optional<std::string> ReadText(const std::string& path) const;
 
-    void Clear() { m_Meshes.clear(); m_Textures.clear(); }
+    // Shared material for these properties (albedo white; per-object color
+    // goes into MeshRendererComponent::Tint). Objects that share a material
+    // and mesh are drawn together in one instanced draw call.
+    Ref<Material> GetSharedMaterial(const std::string& texture, float roughness, float metallic, const Vec3& emissive,
+                                    const Vec2& tiling, bool unlit, bool castShadows, float alpha = 1.0f);
+
+    void Clear() { m_Meshes.clear(); m_Textures.clear(); m_Materials.clear(); }
     size_t MeshCount() const { return m_Meshes.size(); }
     size_t TextureCount() const { return m_Textures.size(); }
 
@@ -34,6 +41,7 @@ private:
     std::string m_Root;
     std::unordered_map<std::string, Ref<Mesh>> m_Meshes;
     std::unordered_map<std::string, Ref<Texture2D>> m_Textures;
+    std::unordered_map<std::string, Ref<Material>> m_Materials;
 };
 
 } // namespace Lapis

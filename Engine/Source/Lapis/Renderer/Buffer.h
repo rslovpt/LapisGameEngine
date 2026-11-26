@@ -19,6 +19,7 @@ public:
     // Replaces the contents; grows the buffer if needed.
     void SetData(const void* data, size_t size);
     size_t GetSize() const { return m_Size; }
+    u32 GetID() const { return m_ID; }
 
 private:
     u32 m_ID = 0;

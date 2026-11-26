@@ -100,7 +100,7 @@ PHASE 4 - Renderer (OpenGL RHI + scene renderer)
 [x] Sky reflections on materials (analytic environment)
 [ ] Physically based rendering (Cook-Torrance) + image based lighting
 [ ] Deferred rendering path
-[ ] Instanced rendering
+[x] Instanced rendering
 [ ] Bloom / SSAO / FXAA
 [ ] DirectX 11 backend behind the same RHI
 
@@ -183,7 +183,7 @@ PHASE 8e - Stress tests & optimization
 [x] Stress test projects: Physics, Rendering, Scripting (auto-exported by
     Build.bat to Export/StressTest_*), CSV + summary logs in Saved/
 [x] Render interpolation between fixed physics steps (no stutter at any Hz)
-[ ] Instanced rendering for repeated meshes (draw-call bound scenes)
+[x] Instanced rendering for repeated meshes (draw-call bound scenes)
 [ ] Physics broadphase: spatial hash / BVH instead of 1-axis sweep
 [ ] Multithreaded physics + job system
 [ ] GPU timing queries (real GPU ms, not just CPU submit time)

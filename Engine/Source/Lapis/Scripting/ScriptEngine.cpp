@@ -112,10 +112,12 @@ int L_Print(lua_State* L) { LAPIS_INFO("[Luau] {}", ConcatArgs(L, 1)); return 0;
 int L_Warn(lua_State* L)  { LAPIS_WARN("[Luau] {}", ConcatArgs(L, 1)); return 0; }
 
 // --- Entity metatable ---------------------------------------------------------
+// Copy-on-write: materials may be shared between many objects.
 Material* EnsureOwnMaterial(Entity e) {
     auto* mr = e.TryGet<MeshRendererComponent>();
     if (!mr) return nullptr;
     if (!mr->MaterialAsset) mr->MaterialAsset = CreateRef<Material>();
+    else if (mr->MaterialAsset.use_count() > 1) mr->MaterialAsset = CreateRef<Material>(*mr->MaterialAsset);
     return mr->MaterialAsset.get();
 }
 
@@ -138,7 +140,11 @@ int E_SetColor(lua_State* L) {
     Vec4 c;
     if (lua_isvector(L, 2)) { Vec3 v = CheckVec(L, 2); c = {v.x, v.y, v.z, (float)luaL_optnumber(L, 3, 1.0)}; }
     else c = {(float)luaL_checknumber(L, 2), (float)luaL_checknumber(L, 3), (float)luaL_checknumber(L, 4), (float)luaL_optnumber(L, 5, 1.0)};
-    if (Material* m = EnsureOwnMaterial(e)) m->Albedo = c;
+    // Color is per object (tint), so objects keep sharing their material.
+    if (auto* mr = e.TryGet<MeshRendererComponent>()) {
+        const Vec4 base = mr->MaterialAsset ? mr->MaterialAsset->Albedo : Vec4(1.0f);
+        mr->Tint = {c.x / std::max(base.x, 1e-3f), c.y / std::max(base.y, 1e-3f), c.z / std::max(base.z, 1e-3f), c.w};
+    }
     return 0;
 }
 
@@ -297,19 +303,14 @@ int S_Spawn(lua_State* L) {
         auto& mr = e.Add<MeshRendererComponent>();
         mr.MeshName = mesh;
         mr.MeshAsset = scene.GetAssets().GetMesh(mesh);
-        auto mat = CreateRef<Material>();
+        // Shared material + per-object tint: spawned objects batch together.
         const Vec3 color = OptVecField(L, 1, "Color", Vec3(0.8f));
-        mat->Albedo = {color.x, color.y, color.z, 1.0f};
-        mat->Roughness = (float)OptNumberField(L, 1, "Roughness", 0.5);
-        mat->Metallic = (float)OptNumberField(L, 1, "Metallic", 0.0);
-        mat->Emissive = OptVecField(L, 1, "Emissive", Vec3(0.0f));
-        mat->Unlit = OptBoolField(L, 1, "Unlit", false);
-        mat->CastShadows = OptBoolField(L, 1, "CastShadows", true);
-        const std::string tex = OptStringField(L, 1, "Texture", "");
-        if (!tex.empty()) mat->AlbedoMap = scene.GetAssets().GetTexture(tex);
         const float tiling = (float)OptNumberField(L, 1, "Tiling", 1.0);
-        mat->Tiling = {tiling, tiling};
-        mr.MaterialAsset = mat;
+        mr.MaterialAsset = scene.GetAssets().GetSharedMaterial(
+            OptStringField(L, 1, "Texture", ""), (float)OptNumberField(L, 1, "Roughness", 0.5),
+            (float)OptNumberField(L, 1, "Metallic", 0.0), OptVecField(L, 1, "Emissive", Vec3(0.0f)), {tiling, tiling},
+            OptBoolField(L, 1, "Unlit", false), OptBoolField(L, 1, "CastShadows", true));
+        mr.Tint = {color.x, color.y, color.z, 1.0f};
     }
 
     const std::string physics = OptStringField(L, 1, "Physics", "");

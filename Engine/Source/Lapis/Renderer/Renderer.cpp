@@ -62,6 +62,8 @@ bool Renderer::Init(u32 width, u32 height, u32 msaaSamples) {
     m_LineVAO->AddVertexBuffer(m_LineVBO, {{AttribType::Float3}, {AttribType::Float4}});
 
     m_White = Texture2D::CreateSolid({1, 1, 1, 1});
+    m_InstanceVBO = CreateRef<VertexBuffer>(nullptr, sizeof(InstanceData) * 1024, BufferUsage::Stream);
+    m_ShadowInstanceVBO = CreateRef<VertexBuffer>(nullptr, sizeof(InstanceData) * 1024, BufferUsage::Stream);
 
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
     m_Initialized = true;
@@ -73,6 +75,7 @@ void Renderer::Shutdown() {
     m_LitShader.reset(); m_ShadowShader.reset(); m_SkyShader.reset(); m_PostShader.reset(); m_LineShader.reset();
     m_HDRBuffer.reset(); m_ResolveBuffer.reset(); m_ShadowMap.reset();
     m_EmptyVAO.reset(); m_LineVAO.reset(); m_LineVBO.reset(); m_White.reset();
+    m_InstanceVBO.reset(); m_ShadowInstanceVBO.reset();
     m_DrawList.clear();
     m_Initialized = false;
 }
@@ -100,18 +103,19 @@ void Renderer::AddPointLight(const PointLight& light) {
     if (m_PointLights.size() < MaxPointLights) m_PointLights.push_back(light);
 }
 
-void Renderer::Submit(const Ref<Mesh>& mesh, const Ref<Material>& material, const Mat4& transform) {
+void Renderer::Submit(const Ref<Mesh>& mesh, const Ref<Material>& material, const Mat4& transform, const Vec4& tint) {
     if (!mesh) return;
     ++m_Stats.Submitted;
-    m_DrawList.push_back({mesh.get(), material.get(), transform, mesh->GetBounds().Transformed(transform)});
+    m_DrawList.push_back({mesh.get(), material.get(), transform, tint, mesh->GetBounds().Transformed(transform)});
 }
 
 void Renderer::EndFrame(u32 targetFBO) {
     if (!m_Initialized) return;
 
-    // Group by material to reduce state changes.
-    std::sort(m_DrawList.begin(), m_DrawList.end(),
-              [](const DrawItem& a, const DrawItem& b) { return a.MaterialPtr < b.MaterialPtr; });
+    // Group by material, then mesh: identical neighbours become instanced batches.
+    std::sort(m_DrawList.begin(), m_DrawList.end(), [](const DrawItem& a, const DrawItem& b) {
+        return a.MaterialPtr != b.MaterialPtr ? a.MaterialPtr < b.MaterialPtr : a.MeshPtr < b.MeshPtr;
+    });
 
     Mat4 lightSpace(1.0f);
     const bool shadows = m_Sun.CastShadows;
@@ -151,11 +155,17 @@ void Renderer::ShadowPass(Mat4& lightSpace) {
 
     m_ShadowShader->Bind();
     m_ShadowShader->SetMat4("u_LightSpace", lightSpace);
+    std::vector<const DrawItem*> casters;
+    casters.reserve(m_DrawList.size());
     for (const DrawItem& item : m_DrawList) {
         if (item.MaterialPtr && (!item.MaterialPtr->CastShadows || item.MaterialPtr->Unlit)) continue;
         if (!lightFrustum.Intersects(item.WorldBounds)) continue;
-        m_ShadowShader->SetMat4("u_Model", item.Transform);
-        item.MeshPtr->Draw();
+        casters.push_back(&item);
+    }
+    std::vector<Batch> batches;
+    BuildBatches(casters, batches, *m_ShadowInstanceVBO);
+    for (const Batch& b : batches) {
+        b.MeshPtr->DrawInstanced(m_ShadowInstanceVBO->GetID(), b.First * sizeof(InstanceData), b.Count);
         ++m_Stats.DrawCalls;
     }
     glDisable(GL_POLYGON_OFFSET_FILL);
@@ -210,11 +220,18 @@ void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
     }
 
     static const Material s_DefaultMaterial;
-    const Material* bound = nullptr;
+    std::vector<const DrawItem*> visible;
+    visible.reserve(m_DrawList.size());
     for (const DrawItem& item : m_DrawList) {
         if (!frustum.Intersects(item.WorldBounds)) { ++m_Stats.Culled; continue; }
+        visible.push_back(&item);
+    }
+    std::vector<Batch> batches;
+    BuildBatches(visible, batches, *m_InstanceVBO);
 
-        const Material* mat = item.MaterialPtr ? item.MaterialPtr : &s_DefaultMaterial;
+    const Material* bound = nullptr;
+    for (const Batch& b : batches) {
+        const Material* mat = b.MaterialPtr ? b.MaterialPtr : &s_DefaultMaterial;
         if (mat != bound) {
             bound = mat;
             s.SetVec4("u_Albedo", mat->Albedo);
@@ -225,12 +242,24 @@ void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
             s.SetVec2("u_Tiling", mat->Tiling);
             (mat->AlbedoMap ? mat->AlbedoMap : m_White)->Bind(0);
         }
-        s.SetMat4("u_Model", item.Transform);
-        s.SetMat4("u_NormalMatrix", Transpose(Inverse(item.Transform)));
-        item.MeshPtr->Draw();
+        b.MeshPtr->DrawInstanced(m_InstanceVBO->GetID(), b.First * sizeof(InstanceData), b.Count);
         ++m_Stats.DrawCalls;
-        m_Stats.Triangles += item.MeshPtr->GetIndexCount() / 3;
+        m_Stats.Instances += b.Count;
+        m_Stats.Triangles += b.MeshPtr->GetIndexCount() / 3 * b.Count;
     }
+}
+
+void Renderer::BuildBatches(const std::vector<const DrawItem*>& items, std::vector<Batch>& out, VertexBuffer& buffer) {
+    m_InstanceData.clear();
+    m_InstanceData.reserve(items.size());
+    for (const DrawItem* item : items) {
+        if (!out.empty() && out.back().MeshPtr == item->MeshPtr && out.back().MaterialPtr == item->MaterialPtr)
+            ++out.back().Count;
+        else
+            out.push_back({item->MeshPtr, item->MaterialPtr, m_InstanceData.size(), 1});
+        m_InstanceData.push_back({item->Transform, item->Tint});
+    }
+    if (!m_InstanceData.empty()) buffer.SetData(m_InstanceData.data(), m_InstanceData.size() * sizeof(InstanceData));
 }
 
 void Renderer::SkyPass() {
