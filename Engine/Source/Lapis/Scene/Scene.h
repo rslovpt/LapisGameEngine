@@ -35,7 +35,9 @@ public:
     void OnStart();                        // starts scripts; call once before the first update
     void OnUpdate(float dt);               // scripts + deferred destruction
     void OnFixedUpdate(float dt);          // physics + collision callbacks
-    void OnRender(Renderer& renderer, float aspect, const CameraView* overrideCamera = nullptr);
+    // interpolation = how far (0..1) the frame is between the last two physics
+    // steps; moving bodies are drawn in between for smooth motion.
+    void OnRender(Renderer& renderer, float aspect, const CameraView* overrideCamera = nullptr, float interpolation = 1.0f);
     void OnStop();
     bool IsRunning() const { return m_Running; }
 

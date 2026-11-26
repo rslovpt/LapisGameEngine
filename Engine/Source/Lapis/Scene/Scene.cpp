@@ -159,6 +159,9 @@ void Scene::OnUpdate(float dt) {
 
 void Scene::OnFixedUpdate(float dt) {
     if (!m_Running) return;
+    registry.Each<RigidBodyComponent, TransformComponent>([](EntityID, RigidBodyComponent&, TransformComponent& t) {
+        t.PrevPosition = t.Position;
+    });
     m_Physics.Step(registry, dt);
 
     if (m_Scripts) {
@@ -210,7 +213,17 @@ bool Scene::GetPrimaryCamera(float aspect, CameraView& out) {
     return true;
 }
 
-void Scene::OnRender(Renderer& renderer, float aspect, const CameraView* overrideCamera) {
+void Scene::OnRender(Renderer& renderer, float aspect, const CameraView* overrideCamera, float interpolation) {
+    // Draw physics bodies between their last two simulated positions.
+    const bool interpolate = m_Running && interpolation < 1.0f;
+    if (interpolate) {
+        const float a = Clamp(interpolation, 0.0f, 1.0f);
+        registry.Each<RigidBodyComponent, TransformComponent>([&](EntityID, RigidBodyComponent& rb, TransformComponent& t) {
+            if (rb.Type == BodyType::Static || rb.Sleeping) return;
+            const Vec3 offset = (t.PrevPosition - t.Position) * (1.0f - a);
+            if (LengthSq(offset) < 4.0f) t.RenderOffset = offset; // ignore teleports
+        });
+    }
     UpdateTransforms();
 
     CameraView view;
@@ -253,6 +266,11 @@ void Scene::OnRender(Renderer& renderer, float aspect, const CameraView* overrid
     }
     for (const auto& l : m_DebugLines) renderer.DrawLine(l.A, l.B, l.Color);
     m_DebugLines.clear();
+
+    if (interpolate) {
+        registry.Each<TransformComponent>([](EntityID, TransformComponent& t) { t.RenderOffset = Vec3(0.0f); });
+        UpdateTransforms(); // gameplay code sees the real simulated positions
+    }
 }
 
 } // namespace Lapis

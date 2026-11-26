@@ -27,7 +27,15 @@ struct TransformComponent {
     Mat4     World = Mat4::Identity();  // computed by Scene::UpdateTransforms
     u64      WorldFrame = 0;            // internal bookkeeping
 
-    Mat4 LocalMatrix() const { return ComposeTRS(Position, Rotation, Scale); }
+    // Render interpolation (physics runs at a fixed rate, rendering doesn't):
+    // PrevPosition = position before the last physics step; RenderOffset is
+    // applied only while a frame is being rendered.
+    Vec3     PrevPosition{0.0f};
+    Vec3     RenderOffset{0.0f};
+
+    Mat4 LocalMatrix() const { return ComposeTRS(Position + RenderOffset, Rotation, Scale); }
+    // Moves without interpolating from the old position (teleport).
+    void Teleport(const Vec3& p) { Position = p; PrevPosition = p; }
 
     // Euler angles in degrees (pitch, yaw, roll).
     Vec3 GetEulerDegrees() const { Vec3 e = Rotation.ToEuler(); return {Degrees(e.x), Degrees(e.y), Degrees(e.z)}; }

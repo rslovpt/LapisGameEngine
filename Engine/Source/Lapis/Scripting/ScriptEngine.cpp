@@ -214,7 +214,7 @@ int E_NewIndex(lua_State* L) {
     auto& t = e.Transform();
     auto wake = [&] { if (auto* rb = e.TryGet<RigidBodyComponent>()) { rb->Sleeping = false; rb->SleepTimer = 0.0f; } };
 
-    if (key == "Position") { t.Position = CheckVec(L, 3); wake(); }
+    if (key == "Position") { t.Teleport(CheckVec(L, 3)); wake(); }
     else if (key == "Rotation") t.SetEulerDegrees(CheckVec(L, 3));
     else if (key == "Scale") { t.Scale = lua_isnumber(L, 3) ? Vec3((float)lua_tonumber(L, 3)) : CheckVec(L, 3); wake(); }
     else if (key == "Velocity") { if (auto* rb = e.TryGet<RigidBodyComponent>()) { rb->Velocity = CheckVec(L, 3); wake(); } }

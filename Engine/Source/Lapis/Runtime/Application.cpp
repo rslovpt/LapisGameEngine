@@ -141,7 +141,7 @@ void Application::Frame(float dt) {
     if (m_Minimized) { if (m_Scene) m_Scene->TakeHud(); return; }
     const float aspect = m_Window->GetAspect();
     if (m_Scene) {
-        m_Scene->OnRender(m_Renderer, aspect, GetCameraOverride());
+        m_Scene->OnRender(m_Renderer, aspect, GetCameraOverride(), m_Accumulator / m_Spec.FixedTimestep);
     } else {
         CameraView view;
         view.View = LookAt({0, 2, 6}, {0, 0, 0}, Vec3::Up());
@@ -152,7 +152,7 @@ void Application::Frame(float dt) {
     OnRender();
     m_Renderer.EndFrame(m_Window->GetBackbufferFBO());
 
-    m_UI->BeginFrame(m_Window->GetWidth(), m_Window->GetHeight());
+    m_UI->BeginFrame(m_Window->GetWidth(), m_Window->GetHeight(), GetUIScale());
     if (m_Scene) {
         for (const auto& cmd : m_Scene->TakeHud()) {
             if (cmd.IsText) m_UI->TextOverlay(hudRect.x + cmd.X, hudRect.y + cmd.Y, cmd.Text, cmd.Color, cmd.Scale);
