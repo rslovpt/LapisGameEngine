@@ -1,0 +1,26 @@
+# Build output
+build/
+out/
+bin/
+lib/
+cmake-build-*/
+CMakeUserPresets.json
+
+# Visual Studio / VS Code / CLion
+.vs/
+.vscode/
+.idea/
+*.sln
+*.vcxproj*
+*.user
+*.suo
+*.pdb
+*.ilk
+
+# Render test output
+*.ppm
+
+# OS junk
+Thumbs.db
+.DS_Store
+desktop.ini

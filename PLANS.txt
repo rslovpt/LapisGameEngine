@@ -1,0 +1,164 @@
+==============================================================================
+ LAPIS GAME ENGINE - MASTER PLAN & CHECKLIST
+==============================================================================
+
+Goal
+----
+A from-scratch, Unreal-style 3D game engine written in modern C++ (C++17),
+rendering through OpenGL 4.5 core profile. The engine is a static library
+("LapisEngine") that games link against; "Sandbox" is the first game built
+on top of it.
+
+Design rules
+------------
+  * Zero third-party dependencies. Windowing (Win32), the OpenGL function
+    loader, math, image/model loading are all written in this repository, so
+    the project builds with nothing but CMake + a C++17 compiler.
+  * Clean module boundaries:  Core -> Math -> Platform -> Renderer -> Scene
+    -> Physics -> Assets -> Runtime (Application). Higher layers depend on
+    lower ones, never the other way round.
+  * Renderer talks to the GPU only through the RHI layer (Renderer/GL*), so a
+    DirectX 11/12 backend can be added later without touching game code.
+  * Everything that can be tested without a GPU has unit tests. Rendering is
+    tested headlessly through an EGL backend on Linux (Mesa llvmpipe).
+
+Target platforms
+----------------
+  * Windows 10/11 (primary): Win32 window + WGL OpenGL 4.5 core context.
+  * Linux (headless): EGL surfaceless context, used for CI and render tests.
+
+Legend:  [x] done   [~] partially done   [ ] not started
+
+------------------------------------------------------------------------------
+PHASE 0 - Repository & build system
+------------------------------------------------------------------------------
+[ ] Repository layout (Engine/, Sandbox/, Tests/, Docs/)
+[ ] Root CMakeLists.txt (C++17, warnings, MSVC + GCC/Clang)
+[ ] .gitignore / .gitattributes
+[ ] README with build instructions
+[ ] PLANS.txt checklist (this file)
+[ ] Continuous integration (GitHub Actions: Windows build + Linux tests)
+
+------------------------------------------------------------------------------
+PHASE 1 - Core
+------------------------------------------------------------------------------
+[ ] Basic types / platform detection macros
+[ ] Logging system (levels, colored console output, timestamps)
+[ ] Assertions (LAPIS_ASSERT / LAPIS_VERIFY with debug break)
+[ ] High-resolution timer / frame clock
+[ ] File system helpers (read text/binary, write, exists)
+[ ] Event system (typed events + dispatcher)
+[ ] Custom allocators (linear/frame allocator, pool allocator)
+[ ] Job system (multithreaded task scheduler)
+
+------------------------------------------------------------------------------
+PHASE 2 - Math
+------------------------------------------------------------------------------
+[ ] Vec2 / Vec3 / Vec4
+[ ] Mat3 / Mat4 (column-major, OpenGL convention)
+[ ] Quaternions (axis-angle, euler, slerp, to-matrix)
+[ ] Transform helpers (translate, rotate, scale, lookAt, perspective, ortho)
+[ ] Geometric primitives: AABB, Ray, Plane, Sphere, Frustum
+[ ] Unit tests for math
+
+------------------------------------------------------------------------------
+PHASE 3 - Platform layer
+------------------------------------------------------------------------------
+[ ] Window abstraction (Window interface + factory)
+[ ] Win32 window (resize, close, fullscreen-friendly, DPI aware)
+[ ] WGL OpenGL 4.5 core context creation (wglCreateContextAttribsARB)
+[ ] VSync control (WGL_EXT_swap_control)
+[ ] Keyboard + mouse input (state, pressed/released this frame, deltas)
+[ ] Mouse capture / relative mode for FPS cameras
+[ ] Headless EGL backend (Linux) for automated render tests
+[ ] Gamepad input (XInput)
+[ ] Native Linux X11 window
+
+------------------------------------------------------------------------------
+PHASE 4 - Renderer (OpenGL RHI + scene renderer)
+------------------------------------------------------------------------------
+[ ] Own OpenGL function loader (no GLAD/GLEW)
+[ ] Shader programs (compile/link errors logged, uniform cache)
+[ ] Vertex/index buffers, vertex arrays, vertex layouts
+[ ] Textures (2D, mipmaps, filtering), cubemaps
+[ ] Framebuffers (color + depth attachments)
+[ ] Mesh + primitive generators (cube, plane, UV sphere)
+[ ] Camera (perspective/orthographic, view/projection)
+[ ] Materials (albedo, metallic/roughness-ish params, texture slots)
+[ ] Lighting: directional light + up to 16 point lights (Blinn-Phong)
+[ ] Shadow mapping for the directional light (PCF filtering)
+[ ] Procedural sky
+[ ] Debug line renderer (AABBs, gizmo axes)
+[ ] HDR render target + tone mapping + gamma correction post pass
+[ ] Frame statistics (draw calls, triangles)
+[ ] Physically based rendering (Cook-Torrance) + image based lighting
+[ ] Deferred rendering path
+[ ] Instanced rendering
+[ ] Bloom / SSAO / anti-aliasing (FXAA)
+[ ] DirectX 11 backend behind the same RHI
+
+------------------------------------------------------------------------------
+PHASE 5 - Scene / Entity Component System
+------------------------------------------------------------------------------
+[ ] Entity registry (generational IDs, component pools)
+[ ] Core components: Name, Transform, MeshRenderer, Camera, Light
+[ ] Parent/child hierarchy with world-matrix propagation
+[ ] Scene class (create/destroy entities, find by name, update/render)
+[ ] Native scripting (ScriptComponent with OnCreate/OnUpdate/OnDestroy)
+[ ] Unit tests for ECS
+[ ] Prefabs
+[ ] Scene serialization to/from text files
+
+------------------------------------------------------------------------------
+PHASE 6 - Physics
+------------------------------------------------------------------------------
+[ ] Rigid bodies (mass, velocity, gravity, damping, static/dynamic)
+[ ] Colliders: sphere, box (AABB)
+[ ] Collision detection: sphere-sphere, box-box, sphere-box
+[ ] Collision response: impulse resolution with restitution + friction
+[ ] Positional correction (no sinking)
+[ ] Raycasts against the physics world
+[ ] Fixed timestep integration
+[ ] Unit tests for physics
+[ ] Oriented boxes (SAT), capsules, mesh colliders
+[ ] Broadphase acceleration (spatial hash / BVH)
+[ ] Joints / constraints
+
+------------------------------------------------------------------------------
+PHASE 7 - Assets
+------------------------------------------------------------------------------
+[ ] OBJ model loader
+[ ] TGA + BMP image loaders
+[ ] Asset manager with caching by path
+[ ] PNG/JPG support
+[ ] glTF 2.0 loader (skinned meshes)
+[ ] Asset hot-reloading
+
+------------------------------------------------------------------------------
+PHASE 8 - Runtime / Application
+------------------------------------------------------------------------------
+[ ] Application base class (OnInit/OnUpdate/OnRender/OnShutdown)
+[ ] Main loop with fixed physics step + variable render step
+[ ] Layered entry point (games implement CreateApplication())
+[ ] Fly camera controller (WASD + mouse look)
+
+------------------------------------------------------------------------------
+PHASE 9 - Sandbox game (engine showcase)
+------------------------------------------------------------------------------
+[ ] Lit scene with ground, shadows, sky
+[ ] Physics playground: drop/throw boxes and spheres
+[ ] Free-fly camera
+[ ] Window title shows FPS and stats
+
+------------------------------------------------------------------------------
+PHASE 10 - Future (bigger milestones, Unreal-style)
+------------------------------------------------------------------------------
+[ ] Audio engine (XAudio2/WASAPI: 3D sound, mixing)
+[ ] Editor: immediate-mode UI, scene hierarchy, inspector, viewport gizmos
+[ ] Skeletal animation + animation blending
+[ ] Particle system
+[ ] Scripting language (Lua) / visual scripting
+[ ] UI system for games (HUD, menus, text rendering)
+[ ] Terrain + level streaming
+[ ] Networking / multiplayer
+[ ] Packaging / cooking builds for distribution

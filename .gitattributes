@@ -1,0 +1,12 @@
+# Normalize line endings in the repository, let Git pick the checkout style.
+* text=auto
+
+*.cpp  text
+*.h    text
+*.txt  text
+*.md   text
+*.glsl text
+*.obj  text
+*.tga  binary
+*.bmp  binary
+*.png  binary
