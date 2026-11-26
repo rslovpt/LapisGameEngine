@@ -13,4 +13,8 @@ float Window::GetContentScale() const {
     return 1.0f;
 }
 
+namespace { std::string s_Clipboard; }
+std::string Window::GetClipboardText() const { return s_Clipboard; }
+void Window::SetClipboardText(const std::string& text) { s_Clipboard = text; }
+
 } // namespace Lapis

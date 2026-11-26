@@ -224,8 +224,15 @@ private:
             }
             case KeyPress:
             case KeyRelease: {
+                if (ev.type == KeyPress) {
+                    char buf[32];
+                    KeySym sym = 0;
+                    const int n = XLookupString(&ev.xkey, buf, sizeof(buf), &sym, nullptr);
+                    for (int i = 0; i < n; ++i) Input::AddTypedChar((u8)buf[i]);
+                }
                 const int key = TranslateKey(XLookupKeysym(&ev.xkey, 0));
                 if (key < 0) break;
+                if (ev.type == KeyPress) Input::AddKeyPress(key);
                 const bool down = ev.type == KeyPress;
                 const bool repeat = down && Input::IsKeyDown(static_cast<Key>(key));
                 Input::SetKey(key, down);

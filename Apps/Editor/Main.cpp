@@ -22,6 +22,9 @@
 #include "Lapis/Lapis.h"
 #include "Lapis/Runtime/EntryPoint.h"
 #include "Lapis/Runtime/Packager.h"
+#include "Lapis/UI/CodeEditor.h"
+
+#include "luacode.h"
 
 namespace fs = std::filesystem;
 using namespace Lapis;
@@ -96,6 +99,21 @@ protected:
         m_ExportRoot = FindRepoFolder("Export");
         if (!OpenProject(m_StartProject)) NewUntitledScene();
         GetWindow().SetVSync(m_Settings.VSync);
+
+        // Built-in code editor: compile-check Luau on save (errors mark the line).
+        m_Code.Validate = [](const std::string& path, const std::string& source) -> std::string {
+            if (FileSystem::ExtensionOf(path) != ".luau") return {};
+            size_t size = 0;
+            char* bc = luau_compile(source.data(), source.size(), nullptr, &size);
+            std::string err;
+            if (bc && size > 0 && bc[0] == 0) err = std::string(bc + 1, size - 1); // ":<line>: <message>"
+            std::free(bc);
+            if (!err.empty() && err[0] == ':') err = err.substr(1);
+            return err;
+        };
+        m_Code.OnSaved = [this](const std::string& path) {
+            m_Status = "Saved " + fs::path(path).filename().string() + (m_Playing ? " - hot-reloading" : "");
+        };
         return true;
     }
 
@@ -124,7 +142,10 @@ protected:
     // per frame
     // =========================================================================
     void OnUpdate(float dt) override {
-        UpdateEditorCamera(dt);
+        const bool typing = m_ShowCode && m_Code.HasFocus();
+        if (!typing) UpdateEditorCamera(dt);
+        else UpdateEditorCamera(0.0f);
+        if (typing) return; // keys go to the code editor
 
         // Shortcuts
         const bool ctrl = Input::IsKeyDown(Key::Control);
@@ -165,6 +186,11 @@ protected:
 
         if (m_Settings.ShowHierarchy && !m_Playing) DrawHierarchy(ui, 0, top, 250, h - top - bottom);
         if (m_Settings.ShowInspector && !m_Playing) DrawInspector(ui, w - 300, top, 300, h - top - bottom);
+        if (m_ShowCode) {
+            const float left = (m_Settings.ShowHierarchy && !m_Playing) ? 258.0f : 8.0f;
+            const float right = (m_Settings.ShowInspector && !m_Playing) ? 308.0f : 8.0f;
+            m_Code.Draw(ui, GetWindow(), left, top + 8, w - left - right, h - top - bottom - 16);
+        }
         if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 360);
         DrawToolbar(ui, w);
         if (m_Settings.ShowStats) DrawStats(ui, w);
@@ -194,6 +220,7 @@ private:
                 ui.EndMenu();
             }
             if (ui.MenuItem("Save Scene", "Ctrl+S", false, !m_Playing && !m_Project.Directory.empty())) SaveScene();
+            if (ui.MenuItem("New Script...", "", false, !m_Project.Directory.empty())) NewScript();
             ui.MenuSeparator();
             if (ui.BeginMenu("Templates")) {
                 if (ui.MenuItem("First Person Character")) CreateFromTemplate("FirstPerson");
@@ -232,6 +259,7 @@ private:
         if (ui.BeginMenu("Window")) {
             if (ui.MenuItem("Hierarchy", "", m_Settings.ShowHierarchy)) m_Settings.ShowHierarchy = !m_Settings.ShowHierarchy;
             if (ui.MenuItem("Inspector", "", m_Settings.ShowInspector)) m_Settings.ShowInspector = !m_Settings.ShowInspector;
+            if (ui.MenuItem("Code Editor", "", m_ShowCode)) { m_ShowCode = !m_ShowCode; m_Code.SetFocus(m_ShowCode); }
             if (ui.MenuItem("Stats Overlay", "", m_Settings.ShowStats)) m_Settings.ShowStats = !m_Settings.ShowStats;
             if (ui.MenuItem("Collider View", "F1", GetScene()->DebugDrawColliders)) GetScene()->DebugDrawColliders = !GetScene()->DebugDrawColliders;
             ui.EndMenu();
@@ -322,9 +350,9 @@ private:
         if (e.Has<CameraComponent>()) ui.Label("  Camera");
         if (auto* sc = e.TryGet<LuauScriptComponent>()) {
             ui.Label("  Luau Script: " + sc->ScriptPath);
-            if (ui.Button("Edit in VS Code")) LapisApp::OpenInVSCode(m_Project.Path(sc->ScriptPath));
+            if (ui.Button("Edit script")) OpenScript(sc->ScriptPath);
             ui.SameLine();
-            if (ui.Button("Open with default app")) LapisApp::OpenInShell(m_Project.Path(sc->ScriptPath));
+            if (ui.Button("Edit in VS Code")) LapisApp::OpenInVSCode(m_Project.Path(sc->ScriptPath));
         }
         ui.Spacing(6);
         if (ui.Button("Duplicate")) DuplicateSelected();
@@ -638,6 +666,30 @@ private:
         ui.ProgressDialog("Exporting '" + m_Project.Name + "'", step, m_Export.Progress);
     }
 
+    void OpenScript(const std::string& relative) {
+        if (m_Code.Open(m_Project.Path(relative), fs::path(relative).filename().string())) m_ShowCode = true;
+    }
+
+    void NewScript() {
+        const fs::path dir = fs::path(m_Project.Directory) / "Scripts";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        fs::path file = dir / "NewScript.luau";
+        for (int i = 2; fs::exists(file); ++i) file = dir / ("NewScript" + std::to_string(i) + ".luau");
+        const std::string name = file.stem().string();
+        FileSystem::WriteText(file.string(),
+            "-- " + name + ".luau\n"
+            "-- Attach this script to an entity (Inspector) or spawn with Script = \"Scripts/" + file.filename().string() + "\".\n"
+            "local " + name + " = {}\n\n"
+            "function " + name + ":OnStart()\n    print(\"Hello from \" .. self.Entity.Name)\nend\n\n"
+            "function " + name + ":OnUpdate(dt: number)\nend\n\n"
+            "return " + name + "\n");
+        OpenScript("Scripts/" + file.filename().string());
+        // Attach it to the selected entity if it has no script yet.
+        if (Entity e = GetScene()->GetEntity(m_Selected); e && !e.Has<LuauScriptComponent>())
+            e.Add<LuauScriptComponent>().ScriptPath = "Scripts/" + file.filename().string();
+    }
+
     // =========================================================================
     // editing
     // =========================================================================
@@ -727,6 +779,8 @@ private:
 
     bool m_Playing = false;
     bool m_ShowSettings = false;
+    bool m_ShowCode = false;
+    CodeEditor m_Code;
     std::string m_Snapshot;
     std::string m_Status;
     EntityID m_Selected;

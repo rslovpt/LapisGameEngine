@@ -195,13 +195,14 @@ void UIRenderer::SetShadow(size_t handle, float x, float y, float w, float h, fl
     Quad(handle, x, y, w, h, u, v, u, v, color, 3.0f, radius, softness, softness * 2.0f * m_Scale);
 }
 
-float UIRenderer::Text(float x, float y, std::string_view text, const Vec4& color, float scale) {
+float UIRenderer::Text(float x, float y, std::string_view text, const Vec4& color, float scale, int font) {
+    font = Clamp(font, 0, FontData::FontCount - 1);
     const float k = scale * FontPixels / FontData::BaseSize;   // UI units per base pixel
     const float startX = x;
     for (char ch : text) {
-        if (ch == '\n') { x = startX; y += LineHeight(scale); continue; }
+        if (ch == '\n') { x = startX; y += LineHeight(scale, font); continue; }
         if (ch < 32 || ch > 126) ch = '?';
-        const FontData::Glyph& g = FontData::Glyphs[ch - 32];
+        const FontData::Glyph& g = FontData::Glyphs[font][ch - 32];
         if (g.W > 0 && g.H > 0) {
             const float u0 = float(g.X) / FontData::AtlasWidth, v0 = float(g.Y) / FontData::AtlasHeight;
             const float u1 = float(g.X + g.W) / FontData::AtlasWidth, v1 = float(g.Y + g.H) / FontData::AtlasHeight;
@@ -212,18 +213,21 @@ float UIRenderer::Text(float x, float y, std::string_view text, const Vec4& colo
     return x;
 }
 
-float UIRenderer::TextWidth(std::string_view text, float scale) const {
+float UIRenderer::TextWidth(std::string_view text, float scale, int font) const {
+    font = Clamp(font, 0, FontData::FontCount - 1);
     const float k = scale * FontPixels / FontData::BaseSize;
     float w = 0, best = 0;
     for (char ch : text) {
         if (ch == '\n') { best = std::max(best, w); w = 0; continue; }
         if (ch < 32 || ch > 126) ch = '?';
-        w += FontData::Glyphs[ch - 32].Advance * k;
+        w += FontData::Glyphs[font][ch - 32].Advance * k;
     }
     return std::max(best, w);
 }
 
-float UIRenderer::LineHeight(float scale) const { return FontData::LineHeight * scale * FontPixels / FontData::BaseSize; }
+float UIRenderer::LineHeight(float scale, int font) const {
+    return FontData::LineHeight[Clamp(font, 0, FontData::FontCount - 1)] * scale * FontPixels / FontData::BaseSize;
+}
 
 void UIRenderer::End(u32 targetFBO) {
     if (m_Vertices.empty() || !m_Shader) return;

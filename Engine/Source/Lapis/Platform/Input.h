@@ -4,6 +4,9 @@
 //     if (Input::IsKeyDown(Key::W)) ...
 //     if (Input::WasKeyPressed(Key::Space)) ...   // only on the frame it went down
 
+#include <string>
+
+#include "Lapis/Core/Base.h"
 #include "Lapis/Math/Math.h"
 
 namespace Lapis {
@@ -31,6 +34,11 @@ public:
     static bool WasMousePressed(MouseButton button);
     static bool WasMouseReleased(MouseButton button);
 
+    // Text typed this frame (UTF-8, printable characters only) and key
+    // presses including OS auto-repeat (for text editing).
+    static const std::string& GetTypedText();
+    static int  GetKeyPresses(Key key);
+
     static Vec2  GetMousePosition();  // window pixels, origin top-left
     static Vec2  GetMouseDelta();     // raw movement this frame
     static float GetScrollDelta();    // wheel notches this frame
@@ -38,6 +46,8 @@ public:
     // --- called by the platform layer / main loop ---------------------------
     static void NewFrame();           // must run before polling window events
     static void SetKey(int key, bool down);
+    static void AddKeyPress(int key);          // every press, including repeats
+    static void AddTypedChar(u32 codepoint);
     static void SetMouseButton(int button, bool down);
     static void SetMousePosition(float x, float y);
     static void AddMouseDelta(float dx, float dy);

@@ -46,6 +46,10 @@ public:
     // settings). Used to size UI so it stays readable and sharp.
     virtual float GetContentScale() const;
 
+    // System clipboard (UTF-8). Backends without one use an in-process clipboard.
+    virtual std::string GetClipboardText() const;
+    virtual void SetClipboardText(const std::string& text);
+
     virtual void* GetNativeHandle() const = 0;
     virtual bool  IsHeadless() const { return false; }
 

@@ -37,9 +37,10 @@ public:
 
     // Default font size is 1.0 = 15 UI units. y is the top of the line.
     // Returns the x position after the text.
-    float Text(float x, float y, std::string_view text, const Vec4& color, float scale = 1.0f);
-    float TextWidth(std::string_view text, float scale = 1.0f) const;
-    float LineHeight(float scale = 1.0f) const;
+    // font: 0 = UI font (proportional), 1 = code font (monospace).
+    float Text(float x, float y, std::string_view text, const Vec4& color, float scale = 1.0f, int font = 0);
+    float TextWidth(std::string_view text, float scale = 1.0f, int font = 0) const;
+    float LineHeight(float scale = 1.0f, int font = 0) const;
 
     // Reserve a filled rounded rect whose geometry is only known later
     // (e.g. a popup background sized after its items were laid out).

@@ -2,7 +2,8 @@
 """Bakes the UI font into a C++ header as a signed distance field (SDF) atlas,
 so text stays sharp at any size / DPI. Glyphs: ASCII 32..126.
 
-Usage: generate_font.py <font.ttf> <out.h> [base_px=32] [spread_px=4]
+Usage: generate_font.py <sans.ttf> <mono.ttf> <out.h> [base_px=32] [spread_px=4]
+Font 0 = UI font (proportional), font 1 = code font (monospace).
 Font: DejaVu Sans (Bitstream Vera / DejaVu license, see ThirdParty/fonts).
 Requires Pillow, numpy, scipy."""
 import base64, sys
@@ -10,14 +11,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import distance_transform_edt
 
-path, out = sys.argv[1], sys.argv[2]
-BASE = int(sys.argv[3]) if len(sys.argv) > 3 else 32
-SPREAD = int(sys.argv[4]) if len(sys.argv) > 4 else 4
+paths, out = sys.argv[1:3], sys.argv[3]
+BASE = int(sys.argv[4]) if len(sys.argv) > 4 else 32
+SPREAD = int(sys.argv[5]) if len(sys.argv) > 5 else 4
 UP = 4                                   # render at 4x, then downsample the SDF
-font = ImageFont.truetype(path, BASE * UP)
-ascent, descent = font.getmetrics()
+fonts = [ImageFont.truetype(p, BASE * UP) for p in paths]
 
-def glyph_sdf(ch):
+def glyph_sdf(font, ch):
     l, t, r, b = font.getbbox(ch)
     pad = SPREAD * UP
     w, h = max(r - l, 1) + 2 * pad, max(b - t, 1) + 2 * pad
@@ -32,14 +32,18 @@ def glyph_sdf(ch):
     small = v.reshape(h // UP, UP, w // UP, UP).mean(axis=(1, 3))
     return small, (l / UP - SPREAD, t / UP - SPREAD)
 
-glyphs = []
-for c in range(32, 127):
-    ch = chr(c)
-    adv = font.getlength(ch) / UP
-    if ch == " ":
-        glyphs.append((np.zeros((1, 1)), (0, 0), adv)); continue
-    sdf, off = glyph_sdf(ch)
-    glyphs.append((sdf, off, adv))
+glyphs = []          # all fonts, 95 glyphs each
+metrics = []
+for font in fonts:
+    ascent, descent = font.getmetrics()
+    metrics.append((ascent / UP, (ascent + descent) / UP))
+    for c in range(32, 127):
+        ch = chr(c)
+        adv = font.getlength(ch) / UP
+        if ch == " ":
+            glyphs.append((np.zeros((1, 1)), (0, 0), adv)); continue
+        sdf, off = glyph_sdf(font, ch)
+        glyphs.append((sdf, off, adv))
 
 W = 512
 x = y = 1; rowh = 0; places = []
@@ -63,14 +67,19 @@ with open(out, "w") as f:
     f.write("constexpr int AtlasWidth = %d;\nconstexpr int AtlasHeight = %d;\n" % (W, H))
     f.write("constexpr float BaseSize = %d.0f;   // glyph metrics below are in base pixels\n" % BASE)
     f.write("constexpr float Spread = %d.0f;\n" % SPREAD)
-    f.write("constexpr float Ascent = %.3ff;\nconstexpr float LineHeight = %.3ff;\n" % (ascent / UP, (ascent + descent) / UP))
+    f.write("constexpr int FontCount = %d; // 0 = UI (sans), 1 = code (mono)\n" % len(fonts))
+    f.write("constexpr float Ascent[FontCount] = {%s};\n" % ", ".join("%.3ff" % m[0] for m in metrics))
+    f.write("constexpr float LineHeight[FontCount] = {%s};\n" % ", ".join("%.3ff" % m[1] for m in metrics))
     f.write("constexpr int WhiteX = %d, WhiteY = %d; // solid texel\n\n" % (W - 2, H - 2))
-    f.write("struct Glyph { short X, Y, W, H; float OffX, OffY, Advance; };\n\n// ASCII 32..126\nconstexpr Glyph Glyphs[95] = {\n")
-    for (sdf, off, adv), (gx, gy, w, h), c in zip(glyphs, places, range(32, 127)):
+    f.write("struct Glyph { short X, Y, W, H; float OffX, OffY, Advance; };\n\n// [font][ASCII 32..126]\nconstexpr Glyph Glyphs[FontCount][95] = {\n")
+    for idx, ((sdf, off, adv), (gx, gy, w, h)) in enumerate(zip(glyphs, places)):
+        c = 32 + idx % 95
+        if idx % 95 == 0: f.write("  {\n")
         ch = chr(c)
         if ch in "\\'": ch = "\\" + ch
         if (sdf.shape == (1, 1)): w = h = 0
         f.write("    {%d, %d, %d, %d, %.3ff, %.3ff, %.3ff}, // '%s'\n" % (gx, gy, w, h, off[0], off[1], adv, ch))
+        if idx % 95 == 94: f.write("  },\n")
     f.write("};\n\n// 8-bit SDF atlas, base64, row-major top-down.\ninline const char* AtlasBase64[] = {\n")
     for ln in lines: f.write('    "%s",\n' % ln)
     f.write("};\nconstexpr int AtlasBase64Lines = %d;\n\n} // namespace Lapis::FontData\n" % len(lines))

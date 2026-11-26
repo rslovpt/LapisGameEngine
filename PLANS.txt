@@ -158,6 +158,8 @@ PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 [x] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time
 [x] Script sandboxing (no os/io access) + per-script environments
 [x] Hot-reload scripts on file change (running instances keep their state)
+[ ] Luau native code generation (Luau CodeGen, x64/arm64) for hot scripts
+[ ] Luau type checking in the editor (Luau.Analysis) - errors/warnings as you type
 [x] File library: sandboxed read/write/append/list inside the game's Saved/ folder
 [x] Perf library: FPS, frame/physics/script/render ms, draws, tris, bodies, contacts
 
@@ -173,6 +175,10 @@ Luau stays the default language; Python is an optional second language.
 [ ] Editor: create/open .py scripts, errors in the log, hot reload
 [ ] Packager: bundle the Python runtime with exported games that use Python
 [ ] Stress test: Scripting test in Python vs Luau
+[ ] Python setup inside the editor (no web browser needed): auto-detect
+    installed Python/PyPy, or pick its folder manually, or download+install:
+    choose a version, show the exact download URL/site before installing,
+    progress bar, then configure the engine to use it
 
 ------------------------------------------------------------------------------
 PHASE 8c - Projects & export to standalone .exe
@@ -220,6 +226,9 @@ PHASE 10 - Future (bigger milestones, Unreal-style)
 [ ] Terrain + level streaming
 [ ] Networking / multiplayer
 [ ] Packaging / cooking builds for distribution
+[ ] "Lapis Engine" release folder - what a customer receives: editor, player,
+    tools, templates, docs, Luau built in (Python not bundled: detected or
+    installed from inside the editor), installer/zip, versioned
 
 ------------------------------------------------------------------------------
 PHASE 11 - Lapis Editor (Unreal-style)

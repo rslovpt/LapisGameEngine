@@ -16,6 +16,8 @@ namespace {
         Vec2  MousePos;
         Vec2  MouseDelta;
         float Scroll = 0.0f;
+        std::string Typed;
+        u8   Presses[KeyCount] = {};
     };
     InputState s_State;
 
@@ -40,6 +42,21 @@ void Input::NewFrame() {
     std::memcpy(s_State.PrevMouse, s_State.Mouse, sizeof(s_State.Mouse));
     s_State.MouseDelta = {};
     s_State.Scroll = 0.0f;
+    s_State.Typed.clear();
+    std::memset(s_State.Presses, 0, sizeof(s_State.Presses));
+}
+
+const std::string& Input::GetTypedText() { return s_State.Typed; }
+int Input::GetKeyPresses(Key key) { int k = static_cast<int>(key); return ValidKey(k) ? s_State.Presses[k] : 0; }
+void Input::AddKeyPress(int key) { if (ValidKey(key) && s_State.Presses[key] < 255) ++s_State.Presses[key]; }
+
+void Input::AddTypedChar(u32 c) {
+    if (c < 32 || c == 127 || (c >= 0xD800 && c <= 0xDFFF) || c > 0x10FFFF) return;
+    std::string& out = s_State.Typed;
+    if (c < 0x80) out += char(c);
+    else if (c < 0x800) { out += char(0xC0 | (c >> 6)); out += char(0x80 | (c & 0x3F)); }
+    else if (c < 0x10000) { out += char(0xE0 | (c >> 12)); out += char(0x80 | ((c >> 6) & 0x3F)); out += char(0x80 | (c & 0x3F)); }
+    else { out += char(0xF0 | (c >> 18)); out += char(0x80 | ((c >> 12) & 0x3F)); out += char(0x80 | ((c >> 6) & 0x3F)); out += char(0x80 | (c & 0x3F)); }
 }
 
 void Input::SetKey(int key, bool down)            { if (ValidKey(key)) s_State.Keys[key] = down; }

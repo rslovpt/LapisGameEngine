@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace Lapis {
 
@@ -183,6 +184,42 @@ public:
     bool IsCursorLocked() const override { return m_CursorLocked; }
 
     void* GetNativeHandle() const override { return m_Hwnd; }
+
+    std::string GetClipboardText() const override {
+        std::string out;
+        if (!OpenClipboard(m_Hwnd)) return out;
+        if (HANDLE h = GetClipboardData(CF_UNICODETEXT)) {
+            if (const wchar_t* w = static_cast<const wchar_t*>(GlobalLock(h))) {
+                const int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+                if (n > 1) { out.resize(n - 1); WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), n, nullptr, nullptr); }
+                GlobalUnlock(h);
+            }
+        }
+        CloseClipboard();
+        // Normalize Windows line endings for the editor.
+        std::string clean;
+        clean.reserve(out.size());
+        for (char c : out) if (c != '\r') clean += c;
+        return clean;
+    }
+
+    void SetClipboardText(const std::string& text) override {
+        std::string crlf;
+        for (char c : text) { if (c == '\n') crlf += '\r'; crlf += c; }
+        const std::wstring w = Widen(crlf);
+        if (!OpenClipboard(m_Hwnd)) return;
+        EmptyClipboard();
+        if (HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (w.size() + 1) * sizeof(wchar_t))) {
+            if (void* p = GlobalLock(mem)) {
+                std::memcpy(p, w.c_str(), (w.size() + 1) * sizeof(wchar_t));
+                GlobalUnlock(mem);
+                if (!SetClipboardData(CF_UNICODETEXT, mem)) GlobalFree(mem);
+            } else {
+                GlobalFree(mem);
+            }
+        }
+        CloseClipboard();
+    }
 
     float GetContentScale() const override {
         if (std::getenv("LAPIS_UI_SCALE")) return Window::GetContentScale();
@@ -367,6 +404,7 @@ LRESULT Win32Window::WndProc(UINT msg, WPARAM wParam, LPARAM lParam) {
             const int key = static_cast<int>(wParam);
             const bool repeat = (lParam & (1 << 30)) != 0;
             Input::SetKey(key, true);
+            Input::AddKeyPress(key);
             KeyPressedEvent e(key, repeat);
             Emit(e);
             if (msg == WM_SYSKEYDOWN && key == VK_F4) break; // keep Alt+F4 working
@@ -381,6 +419,7 @@ LRESULT Win32Window::WndProc(UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         case WM_CHAR: {
+            Input::AddTypedChar(static_cast<u32>(wParam));
             KeyTypedEvent e(static_cast<u32>(wParam));
             Emit(e);
             return 0;

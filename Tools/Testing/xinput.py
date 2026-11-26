@@ -32,7 +32,11 @@ if not dpy:
     sys.exit("xinput.py: cannot open X display")
 
 NAMES = {"Space": "space", "Escape": "Escape", "Enter": "Return", "Shift": "Shift_L",
-         "Control": "Control_L", "Tab": "Tab"}
+         "Control": "Control_L", "Tab": "Tab", "Home": "Home", "End": "End", "Backspace": "BackSpace"}
+
+CHARS = {" ": ("space", False), "-": ("minus", False), "_": ("minus", True), "=": ("equal", False),
+         "(": ("9", True), ")": ("0", True), ".": ("period", False), ",": ("comma", False), "\"": ("apostrophe", True),
+         "'": ("apostrophe", False), ":": ("semicolon", True), ";": ("semicolon", False), "!": ("1", True)}
 
 def keycode(name):
     sym = xlib.XStringToKeysym(NAMES.get(name, name.lower() if len(name) == 1 else name).encode())
@@ -67,6 +71,18 @@ def run(cmd):
             xtst.XTestFakeRelativeMotionEvent(dpy, dx // steps, dy // steps, 0); xlib.XFlush(dpy)
             time.sleep(dur / steps)
         button(b, False)
+    elif op == "type":                    # type "some text" (words joined with spaces)
+        text = " ".join(a)
+        for ch in text:
+            name, shift = CHARS.get(ch, (ch, ch.isupper()))
+            if shift: key("Shift", True)
+            key(name if len(name) > 1 else name.lower(), True); time.sleep(0.02); key(name if len(name) > 1 else name.lower(), False)
+            if shift: key("Shift", False)
+            time.sleep(0.02)
+    elif op == "combo":                   # combo Control s
+        for k in a[:-1]: key(k, True)
+        key(a[-1], True); time.sleep(0.1); key(a[-1], False)
+        for k in reversed(a[:-1]): key(k, False)
     elif op == "sleep":
         time.sleep(float(a[0]))
     else:
