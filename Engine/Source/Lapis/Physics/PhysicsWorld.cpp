@@ -1,5 +1,7 @@
 #include "Lapis/Physics/PhysicsWorld.h"
 
+#include "Lapis/Core/JobSystem.h"
+
 #include <algorithm>
 #include <unordered_map>
 
@@ -140,7 +142,9 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         }
         rb.Force = Vec3(0.0f);
     }
-    for (Body& b : bodies) b.Bounds = ColliderWorldAABB(*b.Transform, *b.Collider);
+    JobSystem::ParallelFor((u32)bodies.size(), 256, [&](u32 begin, u32 end) {
+        for (u32 i = begin; i < end; ++i) bodies[i].Bounds = ColliderWorldAABB(*bodies[i].Transform, *bodies[i].Collider);
+    });
 
     // 3. Broad phase: uniform spatial hash. Cell size follows the typical
     //    body size; very large bodies (ground, walls) go to a separate list
@@ -213,26 +217,41 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         }
     }
 
-    // 4. Narrow phase.
+    // 4. Narrow phase. The expensive shape tests run in parallel and only
+    //    write their own result slot; events and contacts are then assembled
+    //    serially in candidate order, so results are identical to a
+    //    single-threaded run.
+    struct NarrowResult { u8 Kind = 0; Vec3 Normal; float Penetration = 0.0f; }; // 0 none, 1 resting, 2 hit
+    std::vector<NarrowResult> results(candidatesA.size());
+    JobSystem::ParallelFor((u32)candidatesA.size(), 128, [&](u32 begin, u32 end) {
+        for (u32 c = begin; c < end; ++c) {
+            const Body& a = bodies[candidatesA[c]];
+            const Body& b = bodies[candidatesB[c]];
+            if (!a.Moves() && !b.Moves()) continue;
+            // Resting contacts between sleeping bodies (or sleeping vs static) need no work.
+            const bool aRest = !a.Moves() || (a.RB && a.RB->Sleeping);
+            const bool bRest = !b.Moves() || (b.RB && b.RB->Sleeping);
+            if (aRest && bRest) { results[c].Kind = 1; continue; }
+            if (!a.Bounds.Intersects(b.Bounds)) continue;
+            if (Collide(a, b, results[c].Normal, results[c].Penetration)) results[c].Kind = 2;
+        }
+    });
+
     std::vector<Contact> contacts;
     std::unordered_set<u64> pairs;
     for (size_t c = 0; c < candidatesA.size(); ++c) {
+        const NarrowResult& r = results[c];
+        if (r.Kind == 0) continue;
         Body& a = bodies[candidatesA[c]];
         Body& b = bodies[candidatesB[c]];
-        if (!a.Moves() && !b.Moves()) continue;
         const u64 key = PairKey(a.ID, b.ID);
-        // Resting contacts between sleeping bodies (or sleeping vs static) need
-        // no work; remember the pair so waking up doesn't fire a new event.
-        const bool aRest = !a.Moves() || (a.RB && a.RB->Sleeping);
-        const bool bRest = !b.Moves() || (b.RB && b.RB->Sleeping);
-        if (aRest && bRest) {
+        // Resting pair: remember it so waking up doesn't fire a new event.
+        if (r.Kind == 1) {
             if (m_PrevPairs.count(key)) pairs.insert(key);
             continue;
         }
-        if (!a.Bounds.Intersects(b.Bounds)) continue;
-
-        Vec3 n; float pen = 0.0f;
-        if (!Collide(a, b, n, pen)) continue;
+        const Vec3 n = r.Normal;
+        const float pen = r.Penetration;
 
         pairs.insert(key);
         const bool trigger = a.Collider->IsTrigger || b.Collider->IsTrigger;

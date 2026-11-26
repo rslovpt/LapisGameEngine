@@ -35,6 +35,10 @@ struct Project {
     bool  Fullscreen = false;
     float Exposure = 1.0f;
 
+    // Multithreading (job system). 0 workers = automatic (CPU threads - 1).
+    bool  Multithreading = true;
+    u32   WorkerThreads = 0;
+
     std::string Directory;             // folder that contains project.lapis
 
     static constexpr const char* FileName = "project.lapis";

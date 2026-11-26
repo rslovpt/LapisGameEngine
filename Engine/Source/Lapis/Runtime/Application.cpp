@@ -5,6 +5,7 @@
 #include "Lapis/Assets/ImageLoader.h"
 #include "Lapis/Core/Log.h"
 #include "Lapis/Platform/Input.h"
+#include "Lapis/Core/JobSystem.h"
 #include "Lapis/Runtime/Project.h"
 #include "Lapis/Scripting/ScriptEngine.h"
 
@@ -31,6 +32,8 @@ bool Application::Init() {
         LAPIS_WARN("Could not open log file '{}'", m_Spec.LogFile);
     LAPIS_INFO("Lapis Engine starting: '{}' {}x{}", m_Spec.Window.Title, m_Spec.Window.Width, m_Spec.Window.Height);
 
+    JobSystem::Init(m_Spec.WorkerThreads);
+
     m_Window = Window::Create(m_Spec.Window);
     if (!m_Window) { LAPIS_FATAL("Failed to create the window / OpenGL context"); return false; }
     m_Window->SetEventCallback([this](Event& e) { HandleEvent(e); });
@@ -52,6 +55,7 @@ void Application::Shutdown() {
     m_UIRenderer.Shutdown();
     m_Renderer.Shutdown();
     m_Window.reset();
+    JobSystem::Shutdown();
     LAPIS_INFO("Lapis Engine shut down (exit code {})", m_ExitCode);
     Log::CloseFile();
 }
@@ -192,6 +196,8 @@ void Application::Frame(float dt) {
 
 void Application::ApplyGraphicsSettings(const Project& project) {
     m_Window->SetVSync(project.VSync);
+    if (project.WorkerThreads != JobSystem::GetWorkerCount() && project.WorkerThreads != 0) JobSystem::SetWorkerCount(project.WorkerThreads);
+    JobSystem::SetEnabled(project.Multithreading);
     m_Renderer.SetMSAA(std::max<u32>(project.MSAA, 1));
     ShadowSettings& shadows = m_Renderer.GetShadowSettings();
     static const u32 sizes[] = {1024, 1024, 2048, 4096};

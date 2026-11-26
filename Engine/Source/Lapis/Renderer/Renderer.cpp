@@ -1,5 +1,7 @@
 #include "Lapis/Renderer/Renderer.h"
 
+#include "Lapis/Core/JobSystem.h"
+
 #include <algorithm>
 
 #include "Lapis/Core/Log.h"
@@ -232,11 +234,16 @@ void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
     }
 
     static const Material s_DefaultMaterial;
+    // Frustum culling runs on the job system; compaction keeps draw order.
+    std::vector<u8> inside(m_DrawList.size());
+    JobSystem::ParallelFor((u32)m_DrawList.size(), 512, [&](u32 begin, u32 end) {
+        for (u32 i = begin; i < end; ++i) inside[i] = frustum.Intersects(m_DrawList[i].WorldBounds) ? 1 : 0;
+    });
     std::vector<const DrawItem*> visible;
     visible.reserve(m_DrawList.size());
-    for (const DrawItem& item : m_DrawList) {
-        if (!frustum.Intersects(item.WorldBounds)) { ++m_Stats.Culled; continue; }
-        visible.push_back(&item);
+    for (size_t i = 0; i < m_DrawList.size(); ++i) {
+        if (!inside[i]) { ++m_Stats.Culled; continue; }
+        visible.push_back(&m_DrawList[i]);
     }
     std::vector<Batch> batches;
     BuildBatches(visible, batches, *m_InstanceVBO);

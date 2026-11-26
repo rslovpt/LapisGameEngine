@@ -24,6 +24,7 @@ struct ApplicationSpec {
     WindowProps Window;
     std::string LogFile;               // empty = no log file
     u32   MSAASamples = 4;
+    u32   WorkerThreads = 0;           // job system workers (0 = automatic)
     float FixedTimestep = 1.0f / 60.0f;
     bool  ShowStatsInTitle = true;
     u64   MaxFrames = 0;               // >0: quit automatically after N frames (automated tests)

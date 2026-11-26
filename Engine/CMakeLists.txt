@@ -15,7 +15,8 @@ add_library(LapisEngine STATIC ${LAPIS_ENGINE_SOURCES})
 
 target_include_directories(LapisEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Source)
 lapis_set_warnings(LapisEngine)
-target_link_libraries(LapisEngine PUBLIC LuauLib)
+find_package(Threads REQUIRED)
+target_link_libraries(LapisEngine PUBLIC LuauLib Threads::Threads)
 
 if(WIN32)
     target_compile_definitions(LapisEngine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)

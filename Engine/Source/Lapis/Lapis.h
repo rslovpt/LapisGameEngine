@@ -5,6 +5,7 @@
 #include "Lapis/Core/Base.h"
 #include "Lapis/Core/Event.h"
 #include "Lapis/Core/FileSystem.h"
+#include "Lapis/Core/JobSystem.h"
 #include "Lapis/Core/Log.h"
 #include "Lapis/Core/Time.h"
 

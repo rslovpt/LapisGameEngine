@@ -44,6 +44,8 @@ std::optional<Project> Project::Parse(const std::string& text, const std::string
         else if (key == "ShadowDistance") { try { p.ShadowDistance = std::stof(value); } catch (...) {} }
         else if (key == "MaxFPS") p.MaxFPS = ToU32(value, 0);
         else if (key == "Fullscreen") p.Fullscreen = ToBool(value);
+        else if (key == "Multithreading") p.Multithreading = ToBool(value);
+        else if (key == "WorkerThreads") p.WorkerThreads = ToU32(value, 0);
         else if (key == "Exposure") { try { p.Exposure = std::stof(value); } catch (...) {} }
         else LAPIS_WARN("project.lapis line {}: unknown key '{}'", lineNo, key);
     }
@@ -67,6 +69,8 @@ std::string Project::Serialize() const {
     o << "# Game graphics settings\n"
       << "ShadowQuality=" << ShadowQuality << "\nShadowDistance=" << ShadowDistance << "\nMaxFPS=" << MaxFPS
       << "\nFullscreen=" << (Fullscreen ? "true" : "false") << "\nExposure=" << Exposure << "\n";
+    o << "# Multithreading (WorkerThreads=0 means automatic)\n"
+      << "Multithreading=" << (Multithreading ? "true" : "false") << "\nWorkerThreads=" << WorkerThreads << "\n";
     return o.str();
 }
 
