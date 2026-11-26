@@ -211,6 +211,18 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [ ] Viewport gizmos (move / rotate / scale) and mouse picking
 [ ] Undo / redo
 [ ] Content browser (models, textures, scripts, scenes)
+[ ] File > Settings: general editor settings (separate from game settings)
+[ ] Project > Game Graphics Settings (resolution, quality, shadows, MSAA,
+    vsync...) stored per project and used by exported games
+
+------------------------------------------------------------------------------
+PHASE 12 - Multiple graphics APIs (after the first Windows test session)
+------------------------------------------------------------------------------
+[ ] RHI abstraction: renderer talks to an interface, not OpenGL directly
+[ ] Backends: OpenGL 4.5 (current), DirectX 12, Vulkan
+[ ] First-launch prompt: choose GPU/graphics API mode (remembered in settings,
+    changeable later in File > Settings)
+[ ] Shader pipeline per backend (GLSL / HLSL / SPIR-V from one source)
 
 
 
