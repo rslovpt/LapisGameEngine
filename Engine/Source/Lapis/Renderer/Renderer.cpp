@@ -88,6 +88,18 @@ void Renderer::Resize(u32 width, u32 height) {
     m_ResolveBuffer->Resize(width, height);
 }
 
+void Renderer::SetMSAA(u32 samples) {
+    if (!m_Initialized) return;
+    GLint maxSamples = 1;
+    glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+    samples = std::max<u32>(1, std::min<u32>(samples, (u32)std::max(maxSamples, 1)));
+    if (samples == m_Samples) return;
+    m_Samples = samples;
+    FramebufferSpec spec = m_HDRBuffer->GetSpec();
+    spec.Samples = samples;
+    m_HDRBuffer = CreateScope<Framebuffer>(spec);
+}
+
 void Renderer::BeginFrame(const CameraView& camera, const Environment& env) {
     m_Camera = camera;
     m_Env = env;
@@ -118,7 +130,7 @@ void Renderer::EndFrame(u32 targetFBO) {
     });
 
     Mat4 lightSpace(1.0f);
-    const bool shadows = m_Sun.CastShadows;
+    const bool shadows = m_Sun.CastShadows && m_ShadowSettings.Enabled;
     if (shadows) ShadowPass(lightSpace);
     MainPass(lightSpace, shadows);
     SkyPass();

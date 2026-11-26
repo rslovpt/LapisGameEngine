@@ -196,6 +196,21 @@ public:
     }
     bool IsCursorLocked() const override { return m_CursorLocked; }
 
+    void SetFullscreen(bool fullscreen) override {
+        if (fullscreen == m_Fullscreen) return;
+        m_Fullscreen = fullscreen;
+        XEvent ev{};
+        ev.type = ClientMessage;
+        ev.xclient.window = m_Window;
+        ev.xclient.message_type = XInternAtom(m_Display, "_NET_WM_STATE", False);
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = fullscreen ? 1 : 0;
+        ev.xclient.data.l[1] = (long)XInternAtom(m_Display, "_NET_WM_STATE_FULLSCREEN", False);
+        XSendEvent(m_Display, DefaultRootWindow(m_Display), False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+        XFlush(m_Display);
+    }
+    bool IsFullscreen() const override { return m_Fullscreen; }
+
     void* GetNativeHandle() const override { return reinterpret_cast<void*>(m_Window); }
 
 private:
@@ -285,7 +300,7 @@ private:
     EGL::Display m_EGLDisplay = nullptr;
     EGL::Surface m_Surface = nullptr;
     EGL::Context m_Context = nullptr;
-    bool  m_CursorLocked = false, m_Focused = true, m_HasLast = false, m_IgnoreWarp = false;
+    bool  m_CursorLocked = false, m_Focused = true, m_HasLast = false, m_IgnoreWarp = false, m_Fullscreen = false;
     float m_LastX = 0, m_LastY = 0;
 };
 

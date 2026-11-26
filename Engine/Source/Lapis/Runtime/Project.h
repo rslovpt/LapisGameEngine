@@ -28,6 +28,13 @@ struct Project {
     bool VSync = true;
     u32  MSAA = 4;
 
+    // Game graphics settings (used by the player / exported game).
+    int   ShadowQuality = 2;      // 0 off, 1 low (1024), 2 medium (2048), 3 high (4096)
+    float ShadowDistance = 45.0f;
+    u32   MaxFPS = 0;             // 0 = unlimited (or vsync)
+    bool  Fullscreen = false;
+    float Exposure = 1.0f;
+
     std::string Directory;             // folder that contains project.lapis
 
     static constexpr const char* FileName = "project.lapis";

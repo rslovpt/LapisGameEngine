@@ -34,6 +34,7 @@ protected:
                 LAPIS_ERROR("Startup scene '{}' failed to load - starting with an empty scene", m_Project.StartupScene);
         }
         SetScene(scene);
+        ApplyGraphicsSettings(m_Project);
         if (!m_Project.MainScript.empty()) scene->GetScripts().RunFile(m_Project.MainScript);
         return true;
     }

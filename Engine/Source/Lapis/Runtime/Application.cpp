@@ -5,7 +5,10 @@
 #include "Lapis/Assets/ImageLoader.h"
 #include "Lapis/Core/Log.h"
 #include "Lapis/Platform/Input.h"
+#include "Lapis/Runtime/Project.h"
 #include "Lapis/Scripting/ScriptEngine.h"
+
+#include <thread>
 
 namespace Lapis {
 
@@ -84,6 +87,14 @@ int Application::Run() {
         dt = std::min(dt, 0.25f);
 
         Frame(dt);
+
+        // Optional frame cap (sleep, then spin for the last ~1 ms for accuracy).
+        if (m_Spec.MaxFPS > 0 && !m_Window->IsHeadless()) {
+            const double target = 1.0 / m_Spec.MaxFPS;
+            const double remaining = target - frameTimer.Elapsed();
+            if (remaining > 0.002) std::this_thread::sleep_for(std::chrono::duration<double>(remaining - 0.0015));
+            while (frameTimer.Elapsed() < target) {}
+        }
 
         ++m_Time.FrameIndex;
         ++framesSinceTitle;
@@ -177,6 +188,19 @@ void Application::Frame(float dt) {
     perf.DrawCalls = m_Renderer.GetStats().DrawCalls;
     perf.Triangles = m_Renderer.GetStats().Triangles;
     if (m_Scene) m_Scene->Perf = perf;
+}
+
+void Application::ApplyGraphicsSettings(const Project& project) {
+    m_Window->SetVSync(project.VSync);
+    m_Renderer.SetMSAA(std::max<u32>(project.MSAA, 1));
+    ShadowSettings& shadows = m_Renderer.GetShadowSettings();
+    static const u32 sizes[] = {1024, 1024, 2048, 4096};
+    shadows.Enabled = project.ShadowQuality > 0;
+    shadows.MapSize = sizes[Clamp(project.ShadowQuality, 0, 3)];
+    shadows.Distance = project.ShadowDistance;
+    m_Spec.MaxFPS = project.MaxFPS;
+    m_Window->SetFullscreen(project.Fullscreen);
+    if (m_Scene) m_Scene->Env.Exposure *= project.Exposure;
 }
 
 bool Application::SaveScreenshot(const std::string& path) {

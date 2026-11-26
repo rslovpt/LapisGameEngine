@@ -1,5 +1,6 @@
 #include "Lapis/Runtime/Project.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <sstream>
 
@@ -39,6 +40,11 @@ std::optional<Project> Project::Parse(const std::string& text, const std::string
         else if (key == "Height") p.Height = ToU32(value, p.Height);
         else if (key == "VSync") p.VSync = ToBool(value);
         else if (key == "MSAA") p.MSAA = ToU32(value, p.MSAA);
+        else if (key == "ShadowQuality") p.ShadowQuality = (int)std::min<u32>(ToU32(value, 2), 3);
+        else if (key == "ShadowDistance") { try { p.ShadowDistance = std::stof(value); } catch (...) {} }
+        else if (key == "MaxFPS") p.MaxFPS = ToU32(value, 0);
+        else if (key == "Fullscreen") p.Fullscreen = ToBool(value);
+        else if (key == "Exposure") { try { p.Exposure = std::stof(value); } catch (...) {} }
         else LAPIS_WARN("project.lapis line {}: unknown key '{}'", lineNo, key);
     }
     return p;
@@ -58,6 +64,9 @@ std::string Project::Serialize() const {
       << "StartupScene=" << StartupScene << "\n";
     if (!MainScript.empty()) o << "MainScript=" << MainScript << "\n";
     o << "Width=" << Width << "\nHeight=" << Height << "\nVSync=" << (VSync ? "true" : "false") << "\nMSAA=" << MSAA << "\n";
+    o << "# Game graphics settings\n"
+      << "ShadowQuality=" << ShadowQuality << "\nShadowDistance=" << ShadowDistance << "\nMaxFPS=" << MaxFPS
+      << "\nFullscreen=" << (Fullscreen ? "true" : "false") << "\nExposure=" << Exposure << "\n";
     return o.str();
 }
 

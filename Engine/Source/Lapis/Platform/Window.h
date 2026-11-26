@@ -34,6 +34,10 @@ public:
     virtual void SetVSync(bool enabled) = 0;
     virtual bool IsVSync() const = 0;
 
+    // Borderless fullscreen on the current monitor.
+    virtual void SetFullscreen(bool fullscreen) { LAPIS_UNUSED(fullscreen); }
+    virtual bool IsFullscreen() const { return false; }
+
     // Hides the cursor and confines it to the window (FPS-style mouse look).
     virtual void SetCursorLocked(bool locked) = 0;
     virtual bool IsCursorLocked() const = 0;

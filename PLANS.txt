@@ -266,13 +266,13 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [x] Built-in code editor for Luau scripts (syntax highlighting, errors inline)
 [x] External editor support: open scripts in VS Code, auto-reload on save
     (file watcher -> hot-reload changed scripts while the editor is running)
-[ ] Viewport gizmos (move / rotate / scale) and mouse picking
-[ ] Undo / redo
+[x] Viewport gizmos (move / rotate / scale) and mouse picking
+[x] Undo / redo
 [ ] Content browser (models, textures, scripts, scenes)
 [ ] Asset import: drag & drop / File > Import for 3D models (OBJ, FBX, glTF),
     textures (PNG, JPG, TGA, BMP), sounds (WAV, OGG, MP3), fonts
 [ ] File > Settings: general editor settings (separate from game settings)
-[ ] Project > Game Graphics Settings (resolution, quality, shadows, MSAA,
+[x] Project > Game Graphics Settings (resolution, quality, shadows, MSAA,
     vsync...) stored per project and used by exported games
 
 ------------------------------------------------------------------------------

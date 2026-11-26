@@ -185,6 +185,26 @@ public:
 
     void* GetNativeHandle() const override { return m_Hwnd; }
 
+    void SetFullscreen(bool fullscreen) override {
+        if (fullscreen == m_Fullscreen) return;
+        m_Fullscreen = fullscreen;
+        if (fullscreen) {
+            m_WindowedPlacement.length = sizeof(m_WindowedPlacement);
+            GetWindowPlacement(m_Hwnd, &m_WindowedPlacement);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(MonitorFromWindow(m_Hwnd, MONITOR_DEFAULTTONEAREST), &mi);
+            SetWindowLongW(m_Hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+            SetWindowPos(m_Hwnd, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                         mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+        } else {
+            SetWindowLongW(m_Hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+            SetWindowPlacement(m_Hwnd, &m_WindowedPlacement);
+            SetWindowPos(m_Hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+        }
+    }
+    bool IsFullscreen() const override { return m_Fullscreen; }
+
     std::string GetClipboardText() const override {
         std::string out;
         if (!OpenClipboard(m_Hwnd)) return out;
@@ -239,6 +259,8 @@ private:
     HGLRC       m_GLContext = nullptr;
     bool        m_CursorLocked = false;
     bool        m_Focused = true;
+    bool        m_Fullscreen = false;
+    WINDOWPLACEMENT m_WindowedPlacement{};
 };
 
 bool Win32Window::Init() {

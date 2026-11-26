@@ -155,13 +155,16 @@ protected:
         if (m_Playing && Input::WasKeyPressed(Key::Escape) && !GetWindow().IsCursorLocked()) StopPlay();
         if (!m_Playing) {
             if (ctrl && Input::WasKeyPressed(Key::S)) SaveScene();
+            if (ctrl && Input::GetKeyPresses(Key::Z)) { if (Input::IsKeyDown(Key::Shift)) Redo(); else Undo(); }
+            if (ctrl && Input::GetKeyPresses(Key::Y)) Redo();
             if (Input::WasKeyPressed(Key::Delete)) DeleteSelected();
             if (Input::WasKeyPressed(Key::F)) FocusSelected();
         }
         if (Input::WasKeyPressed(Key::F1)) GetScene()->DebugDrawColliders = !GetScene()->DebugDrawColliders;
 
-        // Click-to-select in the viewport.
-        if (!m_Playing && Input::WasMousePressed(MouseButton::Left) && !GetUI().WantsMouse()) PickAtMouse();
+        // Gizmo drag has priority over click-to-select.
+        if (!m_Playing) UpdateGizmo();
+        if (!m_Playing && m_GizmoAxis < 0 && Input::WasMousePressed(MouseButton::Left) && !GetUI().WantsMouse()) PickAtMouse();
     }
 
     void OnRender() override {
@@ -177,7 +180,7 @@ protected:
         Renderer& r = GetRenderer();
         if (auto* mr = e.TryGet<MeshRendererComponent>(); mr && mr->MeshAsset)
             r.DrawAABB(mr->MeshAsset->GetBounds().Transformed(e.Transform().World), {1.0f, 0.6f, 0.1f, 1.0f});
-        r.DrawAxes(e.Transform().World, 1.2f);
+        DrawGizmo(r, e);
         if (auto* l = e.TryGet<LightComponent>(); l && l->Type == LightType::Point)
             r.DrawWireSphere(e.Transform().WorldPosition(), 0.3f, {1, 1, 0.3f, 1});
     }
@@ -194,6 +197,7 @@ protected:
             m_Code.Draw(ui, GetWindow(), left, top + 8, w - left - right, h - top - bottom - 16);
         }
         if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 360);
+        if (m_ShowGraphics) DrawGraphicsSettings(ui, w * 0.5f - 230, top + 40, 460, 320);
         DrawToolbar(ui, w);
         if (m_Settings.ShowStats && !m_ShowCode) DrawStats(ui, w);
         DrawMenuBar(ui);
@@ -245,6 +249,9 @@ private:
         if (ui.BeginMenu("Edit")) {
             if (ui.MenuItem(m_Playing ? "Stop" : "Play", "F5")) TogglePlay();
             ui.MenuSeparator();
+            if (ui.MenuItem("Undo", "Ctrl+Z", false, !m_Playing && !m_UndoStack.empty())) Undo();
+            if (ui.MenuItem("Redo", "Ctrl+Y", false, !m_Playing && !m_RedoStack.empty())) Redo();
+            ui.MenuSeparator();
             if (ui.BeginMenu("Spawn", !m_Playing)) {
                 if (ui.MenuItem("Cube")) SpawnPrimitive("Cube", false);
                 if (ui.MenuItem("Sphere")) SpawnPrimitive("Sphere", false);
@@ -256,6 +263,12 @@ private:
             if (ui.MenuItem("Duplicate Selected", "", false, !m_Playing && GetScene()->GetEntity(m_Selected))) DuplicateSelected();
             if (ui.MenuItem("Delete Selected", "Del", false, !m_Playing && GetScene()->GetEntity(m_Selected))) DeleteSelected();
             if (ui.MenuItem("Focus Selected", "F", false, !m_Playing && GetScene()->GetEntity(m_Selected))) FocusSelected();
+            ui.EndMenu();
+        }
+        if (ui.BeginMenu("Project", !m_Project.Directory.empty())) {
+            if (ui.MenuItem("Game Graphics Settings...")) m_ShowGraphics = !m_ShowGraphics;
+            if (ui.MenuItem("Open Project Folder")) LapisApp::OpenInShell(m_Project.Directory);
+            if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Export.Running)) ExportGame();
             ui.EndMenu();
         }
         if (ui.BeginMenu("Window")) {
@@ -288,6 +301,12 @@ private:
         const float bw = 92, x = width * 0.5f - bw - 4;
         if (ui.ButtonAt(m_Playing ? "Playing" : "Play", x, y + 6, bw, 26, m_Playing) && !m_Playing) StartPlay();
         if (ui.ButtonAt("Stop", x + bw + 8, y + 6, bw, 26) && m_Playing) StopPlay();
+        if (!m_Playing) {
+            const float gx = x - 3 * 78 - 30;
+            if (ui.ButtonAt("Move", gx, y + 6, 74, 26, m_GizmoMode == GizmoMode::Move)) m_GizmoMode = GizmoMode::Move;
+            if (ui.ButtonAt("Rotate", gx + 78, y + 6, 74, 26, m_GizmoMode == GizmoMode::Rotate)) m_GizmoMode = GizmoMode::Rotate;
+            if (ui.ButtonAt("Scale", gx + 156, y + 6, 74, 26, m_GizmoMode == GizmoMode::Scale)) m_GizmoMode = GizmoMode::Scale;
+        }
         const std::string title = m_Project.Name.empty() ? "No project" : m_Project.Name + "  -  " + GetScene()->GetName();
         r.Text(12, y + (ToolbarHeight - r.LineHeight()) * 0.5f, title, ui.Style.TextDim);
         if (m_Playing) r.Rect(0, y + ToolbarHeight - 2, width, 2, {0.2f, 0.8f, 0.3f, 1.0f});
@@ -334,9 +353,9 @@ private:
             const char* axes[3] = {"X", "Y", "Z"};
             for (int i = 0; i < 3; ++i) {
                 if (i > 0) ui.SameLine(10);
-                if (ui.Button(std::string("-") + axes[i], 38)) { value[i] -= step; apply(value); }
+                if (ui.Button(std::string("-") + axes[i], 38)) { RecordUndo(); value[i] -= step; apply(value); }
                 ui.SameLine(2);
-                if (ui.Button(std::string("+") + axes[i], 38)) { value[i] += step; apply(value); }
+                if (ui.Button(std::string("+") + axes[i], 38)) { RecordUndo(); value[i] += step; apply(value); }
             }
             ui.Spacing(4);
         };
@@ -360,6 +379,53 @@ private:
         if (ui.Button("Duplicate")) DuplicateSelected();
         ui.SameLine();
         if (ui.Button("Delete")) DeleteSelected();
+        ui.EndPanel();
+    }
+
+    void DrawGraphicsSettings(UIContext& ui, float x, float y, float w, float h) {
+        Project& p = m_Project;
+        ui.BeginPanel("Game Graphics Settings  -  " + p.Name, x, y, w, h);
+        ui.Label("Used by the exported game (saved in project.lapis).", &ui.Style.TextDim);
+        ui.Spacing(4);
+        bool changed = false;
+        static const char* shadowNames[] = {"Off", "Low (1024)", "Medium (2048)", "High (4096)"};
+        if (ui.Button(std::string("Shadows: ") + shadowNames[Clamp(p.ShadowQuality, 0, 3)], 260)) { p.ShadowQuality = (p.ShadowQuality + 1) % 4; changed = true; }
+        if (ui.Button(Format("Shadow distance: {} m", (int)p.ShadowDistance), 260)) {
+            p.ShadowDistance = p.ShadowDistance >= 120 ? 25.0f : p.ShadowDistance + 20.0f; changed = true;
+        }
+        if (ui.Button(Format("Anti-aliasing: {}", p.MSAA <= 1 ? std::string("Off") : std::to_string(p.MSAA) + "x MSAA"), 260)) {
+            p.MSAA = p.MSAA >= 8 ? 1 : (p.MSAA <= 1 ? 2 : p.MSAA * 2); changed = true;
+        }
+        if (ui.Button(std::string("VSync: ") + (p.VSync ? "On" : "Off"), 260)) { p.VSync = !p.VSync; changed = true; }
+        if (ui.Button(p.MaxFPS ? Format("Frame cap: {} FPS", p.MaxFPS) : std::string("Frame cap: unlimited"), 260)) {
+            static const u32 caps[] = {0, 30, 60, 120, 144, 240};
+            size_t i = 0;
+            while (i < 6 && caps[i] != p.MaxFPS) ++i;
+            p.MaxFPS = caps[(i + 1) % 6]; changed = true;
+        }
+        if (ui.Button(std::string("Fullscreen: ") + (p.Fullscreen ? "On" : "Off"), 260)) { p.Fullscreen = !p.Fullscreen; changed = true; }
+        if (ui.Button(Format("Window size: {} x {}", p.Width, p.Height), 260)) {
+            static const u32 sizes[][2] = {{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}};
+            size_t i = 0;
+            while (i < 4 && sizes[i][0] != p.Width) ++i;
+            i = (i + 1) % 4;
+            p.Width = sizes[i][0]; p.Height = sizes[i][1]; changed = true;
+        }
+        if (ui.Button(Format("Exposure: {}%", (int)(p.Exposure * 100 + 0.5f)), 260)) {
+            p.Exposure = p.Exposure >= 1.5f ? 0.6f : p.Exposure + 0.1f; changed = true;
+        }
+        if (changed) {
+            p.Save();
+            // Preview in the editor viewport (not fullscreen / frame cap / vsync).
+            GetRenderer().SetMSAA(std::max<u32>(p.MSAA, 1));
+            static const u32 mapSizes[] = {1024, 1024, 2048, 4096};
+            GetRenderer().GetShadowSettings().Enabled = p.ShadowQuality > 0;
+            GetRenderer().GetShadowSettings().MapSize = mapSizes[Clamp(p.ShadowQuality, 0, 3)];
+            GetRenderer().GetShadowSettings().Distance = p.ShadowDistance;
+            m_Status = "Game graphics settings saved to project.lapis";
+        }
+        ui.Spacing(6);
+        if (ui.Button("Close", 90)) m_ShowGraphics = false;
         ui.EndPanel();
     }
 
@@ -455,6 +521,112 @@ private:
         m_EditorView.Position = m_CamPos;
     }
 
+    // ---- transform gizmo: drag an axis handle to move / rotate / scale ----------
+    enum class GizmoMode { Move, Rotate, Scale };
+
+    float GizmoSize(const Vec3& at) const { return std::max(0.5f, Distance(m_CamPos, at) * 0.15f); }
+
+    // Screen position (pixels) of a world point; false if behind the camera.
+    bool ToScreen(const Vec3& p, Vec2& out) const {
+        const Vec4 c = m_EditorView.ViewProjection() * Vec4(p, 1.0f);
+        if (c.w <= 0.01f) return false;
+        out = {(c.x / c.w * 0.5f + 0.5f) * GetWindowConst().GetWidth(), (1.0f - (c.y / c.w * 0.5f + 0.5f)) * GetWindowConst().GetHeight()};
+        return true;
+    }
+    const Window& GetWindowConst() const { return const_cast<EditorApp*>(this)->GetWindow(); }
+
+    int HoveredAxis(const Vec3& origin, float size) const {
+        Vec2 o;
+        if (!ToScreen(origin, o)) return -1;
+        const Vec2 m = Input::GetMousePosition();
+        int best = -1;
+        float bestDist = 10.0f * GetWindowConst().GetContentScale();
+        for (int a = 0; a < 3; ++a) {
+            Vec3 dir(0.0f); dir[a] = 1.0f;
+            Vec2 tip;
+            if (!ToScreen(origin + dir * size, tip)) continue;
+            const Vec2 seg = tip - o;
+            const float len2 = Dot(seg, seg);
+            if (len2 < 1.0f) continue;
+            const float t = Clamp(Dot(m - o, seg) / len2, 0.0f, 1.0f);
+            const float d = Length(m - (o + seg * t));
+            if (d < bestDist) { bestDist = d; best = a; }
+        }
+        return best;
+    }
+
+    void UpdateGizmo() {
+        Entity e = GetScene()->GetEntity(m_Selected);
+        if (!e) { m_GizmoAxis = -1; return; }
+        GetScene()->UpdateTransforms();
+        auto& t = e.Transform();
+        const Vec3 origin = t.WorldPosition();
+        const float size = GizmoSize(origin);
+        m_GizmoHover = GetUI().WantsMouse() ? -1 : HoveredAxis(origin, size);
+
+        if (m_GizmoAxis < 0 && m_GizmoHover >= 0 && Input::WasMousePressed(MouseButton::Left)) {
+            RecordUndo();
+            m_GizmoAxis = m_GizmoHover;
+            m_GizmoLastMouse = Input::GetMousePosition();
+        }
+        if (m_GizmoAxis >= 0 && !Input::IsMouseDown(MouseButton::Left)) { m_GizmoAxis = -1; return; }
+        if (m_GizmoAxis < 0) return;
+
+        // Mouse movement projected on the axis' screen direction = world units.
+        Vec3 dir(0.0f); dir[m_GizmoAxis] = 1.0f;
+        Vec2 o, tip;
+        if (!ToScreen(origin, o) || !ToScreen(origin + dir * size, tip)) return;
+        const Vec2 screenAxis = tip - o;
+        const float pixelsPerUnit = std::max(Length(screenAxis) / size, 1e-3f);
+        const Vec2 mouse = Input::GetMousePosition();
+        const float along = Dot(mouse - m_GizmoLastMouse, Normalize(screenAxis)) / pixelsPerUnit;
+        m_GizmoLastMouse = mouse;
+        const bool snap = Input::IsKeyDown(Key::Control);
+
+        switch (m_GizmoMode) {
+            case GizmoMode::Move:
+                t.Position[m_GizmoAxis] += along;
+                if (snap) t.Position[m_GizmoAxis] = std::round(t.Position[m_GizmoAxis] * 2.0f) / 2.0f;
+                break;
+            case GizmoMode::Rotate: {
+                Vec3 euler = t.GetEulerDegrees();
+                euler[m_GizmoAxis] += along * 45.0f;
+                if (snap) euler[m_GizmoAxis] = std::round(euler[m_GizmoAxis] / 15.0f) * 15.0f;
+                t.SetEulerDegrees(euler);
+                break;
+            }
+            case GizmoMode::Scale:
+                t.Scale[m_GizmoAxis] = std::max(0.05f, t.Scale[m_GizmoAxis] + along);
+                if (snap) t.Scale[m_GizmoAxis] = std::max(0.25f, std::round(t.Scale[m_GizmoAxis] * 4.0f) / 4.0f);
+                break;
+        }
+        t.PrevPosition = t.Position;
+    }
+
+    void DrawGizmo(Renderer& r, Entity e) {
+        const Vec3 origin = e.Transform().WorldPosition();
+        const float size = GizmoSize(origin);
+        const Vec4 colors[3] = {{1, 0.25f, 0.25f, 1}, {0.3f, 1, 0.3f, 1}, {0.35f, 0.55f, 1, 1}};
+        for (int a = 0; a < 3; ++a) {
+            Vec3 dir(0.0f); dir[a] = 1.0f;
+            const bool hot = a == m_GizmoAxis || (m_GizmoAxis < 0 && a == m_GizmoHover);
+            const Vec4 c = hot ? Vec4(1, 1, 0.3f, 1) : colors[a];
+            const Vec3 tip = origin + dir * size;
+            r.DrawLine(origin, tip, c);
+            // handle at the tip: arrow (move), ring (rotate), box (scale)
+            const float hs = size * 0.08f;
+            if (m_GizmoMode == GizmoMode::Move) {
+                Vec3 side(0.0f); side[(a + 1) % 3] = 1.0f;
+                Vec3 side2(0.0f); side2[(a + 2) % 3] = 1.0f;
+                for (const Vec3& s : {side, -side, side2, -side2}) r.DrawLine(tip, tip - dir * hs * 2.0f + s * hs, c);
+            } else if (m_GizmoMode == GizmoMode::Scale) {
+                r.DrawAABB(AABB::FromCenterExtents(tip, Vec3(hs)), c);
+            } else {
+                r.DrawWireSphere(tip, hs, c);
+            }
+        }
+    }
+
     void PickAtMouse() {
         const Vec2 m = Input::GetMousePosition();
         const float nx = m.x / GetWindow().GetWidth() * 2.0f - 1.0f;
@@ -507,6 +679,39 @@ private:
     // =========================================================================
     // play mode
     // =========================================================================
+    // Snapshot-based undo: every editing action records the scene before it.
+    void RecordUndo() {
+        if (m_Playing) return;
+        m_UndoStack.push_back(SceneSerializer::Serialize(*GetScene()));
+        if (m_UndoStack.size() > 100) m_UndoStack.erase(m_UndoStack.begin());
+        m_RedoStack.clear();
+    }
+
+    void RestoreSnapshot(const std::string& text) {
+        const std::string selectedName = GetScene()->GetEntity(m_Selected) ? GetScene()->GetEntity(m_Selected).GetName() : "";
+        auto scene = MakeScene();
+        SceneSerializer::Deserialize(*scene, text);
+        SetScene(scene);
+        m_Selected = {};
+        if (!selectedName.empty()) if (Entity e = scene->FindEntityByName(selectedName)) m_Selected = e.GetID();
+    }
+
+    void Undo() {
+        if (m_Playing || m_UndoStack.empty()) return;
+        m_RedoStack.push_back(SceneSerializer::Serialize(*GetScene()));
+        RestoreSnapshot(m_UndoStack.back());
+        m_UndoStack.pop_back();
+        m_Status = "Undo";
+    }
+
+    void Redo() {
+        if (m_Playing || m_RedoStack.empty()) return;
+        m_UndoStack.push_back(SceneSerializer::Serialize(*GetScene()));
+        RestoreSnapshot(m_RedoStack.back());
+        m_RedoStack.pop_back();
+        m_Status = "Redo";
+    }
+
     void TogglePlay() { if (m_Playing) StopPlay(); else StartPlay(); }
 
     void StartPlay() {
@@ -550,6 +755,8 @@ private:
         if (!project) { m_Status = "Could not open project: " + dir; return false; }
         if (m_Playing) StopPlay();
         m_Project = *project;
+        m_UndoStack.clear();
+        m_RedoStack.clear();
         auto scene = MakeScene();
         if (!SceneSerializer::Load(*scene, m_Project.Path(m_Project.StartupScene)))
             m_Status = "Startup scene missing - created an empty scene";
@@ -705,6 +912,7 @@ private:
     }
 
     void SpawnPrimitive(const std::string& mesh, bool physics) {
+        RecordUndo();
         Scene& s = *GetScene();
         Entity e = s.CreateEntity(physics ? (mesh == "Cube" ? "Crate" : "Ball") : mesh);
         e.Transform().Position = SpawnPoint();
@@ -720,6 +928,7 @@ private:
     }
 
     void SpawnLight() {
+        RecordUndo();
         Entity e = GetScene()->CreateEntity("Point Light");
         e.Transform().Position = SpawnPoint() + Vec3(0, 1.5f, 0);
         e.Add<LightComponent>();
@@ -727,6 +936,7 @@ private:
     }
 
     void DuplicateSelected() {
+        RecordUndo();
         Scene& s = *GetScene();
         Entity src = s.GetEntity(m_Selected);
         if (!src) return;
@@ -760,6 +970,7 @@ private:
     void DeleteSelected() {
         Entity e = GetScene()->GetEntity(m_Selected);
         if (!e) return;
+        RecordUndo();
         GetScene()->DestroyEntity(e);
         GetScene()->FlushPendingDestroys(); // edit mode has no update loop to do it
         m_Selected = {};
@@ -783,13 +994,18 @@ private:
 
     bool m_Playing = false;
     bool m_ShowSettings = false;
+    bool m_ShowGraphics = false;
     bool m_ShowCode = false;
     CodeEditor m_Code;
     std::string m_Snapshot;
+    std::vector<std::string> m_UndoStack, m_RedoStack;
     std::string m_Status;
     EntityID m_Selected;
 
     CameraView m_EditorView;
+    GizmoMode m_GizmoMode = GizmoMode::Move;
+    int  m_GizmoAxis = -1, m_GizmoHover = -1;
+    Vec2 m_GizmoLastMouse;
     Vec3 m_CamPos{0, 5, 14};
     float m_Yaw = 0, m_Pitch = -15;
     bool m_Flying = false;

@@ -45,6 +45,7 @@ struct Environment {
 };
 
 struct ShadowSettings {
+    bool  Enabled = true;
     u32   MapSize = 2048;
     float Distance = 45.0f; // world units covered in front of the camera
 };
@@ -63,6 +64,8 @@ public:
     bool Init(u32 width, u32 height, u32 msaaSamples = 4);
     void Shutdown();
     void Resize(u32 width, u32 height);
+    void SetMSAA(u32 samples);          // recreates the HDR target
+    u32  GetMSAA() const { return m_Samples; }
 
     void BeginFrame(const CameraView& camera, const Environment& env = {});
     void SetDirectionalLight(const DirectionalLight& light) { m_Sun = light; }
