@@ -238,6 +238,10 @@ PHASE 13 - More platforms (near the end)
 [ ] Later: Android, iOS (mobile renderer, touch input, store packaging)
 [ ] Later: VR (OpenXR)
 [ ] Packaging / cooking builds for distribution
+[ ] First-launch setup screen in release builds ("Installing dependencies..."
+    with progress: runtimes, shader cache, default content, file associations)
+[ ] Auto-updates from a Lapis update server (future): version check on start,
+    changelog, download with progress, verified install, rollback
 [ ] "Lapis Engine" release folder - what a customer receives: editor, player,
     tools, templates, docs, Luau built in (Python not bundled: detected or
     installed from inside the editor), installer/zip, versioned
