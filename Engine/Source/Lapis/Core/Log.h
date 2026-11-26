@@ -36,6 +36,12 @@ public:
     static LogLevel GetLevel();
     static void Write(LogLevel level, const std::string& message);
 
+    // Mirrors every message to a text file (flushed per line so the log
+    // survives crashes). Creates parent directories. Returns false on failure.
+    static bool OpenFile(const std::string& path);
+    static void CloseFile();
+    static const std::string& GetFilePath();
+
     template <typename... Args>
     static void Print(LogLevel level, std::string_view fmt, const Args&... args) {
         if (level < GetLevel()) return;

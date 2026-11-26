@@ -74,7 +74,18 @@ uniform float u_ShadowTexel;
 uniform vec3  u_FogColor;
 uniform float u_FogDensity;
 
+uniform vec3  u_SkyZenith;
+uniform vec3  u_SkyHorizon;
+uniform vec3  u_SkyGround;
+uniform float u_EnvIntensity;
+
 out vec4 o_Color;
+
+vec3 SkyColor(vec3 d) {
+    float h = d.y;
+    return h > 0.0 ? mix(u_SkyHorizon, u_SkyZenith, pow(h, 0.5))
+                   : mix(u_SkyHorizon, u_SkyGround, pow(min(-h * 4.0, 1.0), 0.6));
+}
 
 float SunShadow(vec3 N, vec3 L) {
     if (u_ShadowsEnabled == 0) return 1.0;
@@ -128,9 +139,17 @@ void main() {
         color += Shade(N, V, toLight / max(d, 1e-4), u_PointLights[i].Color * atten, albedo);
     }
 
-    // Hemisphere ambient
+    // Hemisphere ambient (diffuse)
     vec3 ambient = mix(u_AmbientGround, u_AmbientSky, N.y * 0.5 + 0.5);
-    color += ambient * albedo * (1.0 - 0.5 * u_Metallic);
+    color += ambient * albedo * (1.0 - u_Metallic);
+
+    // Environment reflection from the analytic sky (cheap stand-in for IBL)
+    vec3  R = reflect(-V, N);
+    float NdotV = max(dot(N, V), 0.0);
+    vec3  F0 = mix(vec3(0.04), albedo, u_Metallic);
+    vec3  Fenv = F0 + (max(vec3(1.0 - u_Roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+    vec3  env = mix(SkyColor(R), (u_SkyHorizon + u_SkyZenith) * 0.5, u_Roughness);
+    color += env * Fenv * u_EnvIntensity;
     color += u_Emissive;
 
     // Fog

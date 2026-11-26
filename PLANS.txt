@@ -78,23 +78,27 @@ PHASE 3 - Platform layer
 PHASE 4 - Renderer (OpenGL RHI + scene renderer)
 ------------------------------------------------------------------------------
 [x] Own OpenGL function loader (no GLAD/GLEW)
-[ ] Shader programs (compile/link errors logged, uniform cache)
-[ ] Vertex/index buffers, vertex arrays, vertex layouts
-[ ] Textures (2D, mipmaps, filtering), cubemaps
-[ ] Framebuffers (color + depth attachments)
-[ ] Mesh + primitive generators (cube, plane, UV sphere)
-[ ] Camera (perspective/orthographic, view/projection)
-[ ] Materials (albedo, metallic/roughness-ish params, texture slots)
-[ ] Lighting: directional light + up to 16 point lights (Blinn-Phong)
-[ ] Shadow mapping for the directional light (PCF filtering)
-[ ] Procedural sky
-[ ] Debug line renderer (AABBs, gizmo axes)
-[ ] HDR render target + tone mapping + gamma correction post pass
-[ ] Frame statistics (draw calls, triangles)
+[x] Shader programs (compile/link errors logged, uniform cache)
+[x] Vertex/index buffers, vertex arrays, vertex layouts
+[x] Textures (2D, sRGB, mipmaps, anisotropic filtering)
+[ ] Cubemap textures
+[x] Framebuffers (color + depth attachments)
+[x] Mesh + primitive generators (cube, plane, UV sphere)
+[x] Camera (perspective/orthographic, view/projection)
+[x] Materials (albedo, metallic/roughness-ish params, texture slots)
+[x] Lighting: directional light + up to 16 point lights (Blinn-Phong)
+[x] Shadow mapping for the directional light (PCF filtering)
+[x] Procedural sky
+[x] Debug line renderer (AABBs, gizmo axes)
+[x] HDR render target + tone mapping + gamma correction post pass
+[x] Frame statistics (draw calls, triangles)
+[x] Frustum culling of draw calls
+[x] MSAA anti-aliasing (offscreen 4x, resolved before post)
+[x] Sky reflections on materials (analytic environment)
 [ ] Physically based rendering (Cook-Torrance) + image based lighting
 [ ] Deferred rendering path
 [ ] Instanced rendering
-[ ] Bloom / SSAO / anti-aliasing (FXAA)
+[ ] Bloom / SSAO / FXAA
 [ ] DirectX 11 backend behind the same RHI
 
 ------------------------------------------------------------------------------
@@ -128,7 +132,7 @@ PHASE 6 - Physics
 PHASE 7 - Assets
 ------------------------------------------------------------------------------
 [ ] OBJ model loader
-[ ] TGA + BMP image loaders
+[x] TGA + BMP image loaders
 [ ] Asset manager with caching by path
 [ ] PNG/JPG support
 [ ] glTF 2.0 loader (skinned meshes)
@@ -141,6 +145,32 @@ PHASE 8 - Runtime / Application
 [ ] Main loop with fixed physics step + variable render step
 [ ] Layered entry point (games implement CreateApplication())
 [ ] Fly camera controller (WASD + mouse look)
+
+------------------------------------------------------------------------------
+PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
+------------------------------------------------------------------------------
+[ ] Vendor Luau VM + compiler (ThirdParty/luau, pinned release, MIT)
+[ ] ScriptEngine: compile + run .luau files, error reporting with line numbers
+[ ] LuauScript component: per-entity script with OnStart/OnUpdate/OnDestroy
+[ ] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time
+[ ] Script sandboxing (no os/io access) + per-script environments
+[ ] Hot-reload scripts on file change
+
+------------------------------------------------------------------------------
+PHASE 8c - Projects & export to standalone .exe
+------------------------------------------------------------------------------
+[ ] Project format (project.lapis: name, startup scene, window settings)
+[ ] Scene files (text format: entities, components, scripts)
+[ ] LapisPlayer runtime: loads a project folder and runs it
+[ ] Packager: Export/<Game>/<Game>.exe + Content/ (copy runtime + assets)
+[ ] Build.bat: one-click build into Binaries/
+
+------------------------------------------------------------------------------
+PHASE 8d - Diagnostics
+------------------------------------------------------------------------------
+[x] Log file sink (Binaries/Logs/Lapis.log, flushed per line)
+[ ] LapisDiagnostics.exe: system + GPU info, unit tests, shader compile,
+    render checks, screenshot, frame timing -> diagnostics_report.txt
 
 ------------------------------------------------------------------------------
 PHASE 9 - Sandbox game (engine showcase)

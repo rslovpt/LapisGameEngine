@@ -39,6 +39,7 @@ struct Environment {
     Vec3  SkyHorizon{0.70f, 0.80f, 0.95f};
     Vec3  SkyGround{0.25f, 0.24f, 0.22f};
     float AmbientIntensity = 0.45f;
+    float ReflectionIntensity = 1.0f;
     float FogDensity = 0.006f;
     float Exposure = 1.0f;
 };
@@ -88,7 +89,7 @@ private:
         Mat4      Transform;
         AABB      WorldBounds;
     };
-    struct LineVertex { Vec3 Position; Vec4 Color; };
+    struct DebugVertex { Vec3 Position; Vec4 Color; };
 
     void ShadowPass(Mat4& lightSpace);
     void MainPass(const Mat4& lightSpace, bool shadows);
@@ -114,7 +115,7 @@ private:
     ShadowSettings    m_ShadowSettings;
     std::vector<PointLight> m_PointLights;
     std::vector<DrawItem>   m_DrawList;
-    std::vector<LineVertex> m_Lines;
+    std::vector<DebugVertex> m_Lines;
     RenderStats m_Stats;
     bool m_Initialized = false;
 };

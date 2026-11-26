@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <filesystem>
 #include <mutex>
 
 #if LAPIS_PLATFORM_WINDOWS
@@ -21,6 +22,8 @@ namespace Lapis {
 namespace {
     LogLevel   s_Level = LogLevel::Trace;
     std::mutex s_Mutex;
+    FILE*       s_File = nullptr;
+    std::string s_FilePath;
 
     const char* LevelName(LogLevel level) {
         switch (level) {
@@ -59,6 +62,24 @@ namespace {
 }
 
 void Log::SetLevel(LogLevel level) { s_Level = level; }
+
+bool Log::OpenFile(const std::string& path) {
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    if (s_File) { std::fclose(s_File); s_File = nullptr; }
+    std::error_code ec;
+    const std::filesystem::path p(path);
+    if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path(), ec);
+    s_File = std::fopen(path.c_str(), "w");
+    s_FilePath = s_File ? path : std::string();
+    return s_File != nullptr;
+}
+
+void Log::CloseFile() {
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    if (s_File) { std::fclose(s_File); s_File = nullptr; }
+}
+
+const std::string& Log::GetFilePath() { return s_FilePath; }
 LogLevel Log::GetLevel() { return s_Level; }
 
 void Log::Write(LogLevel level, const std::string& message) {
@@ -76,6 +97,10 @@ void Log::Write(LogLevel level, const std::string& message) {
     std::strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm);
 
     std::lock_guard<std::mutex> lock(s_Mutex);
+    if (s_File) {
+        std::fprintf(s_File, "[%s] [%s] %s\n", timeBuf, LevelName(level), message.c_str());
+        std::fflush(s_File);
+    }
     FILE* stream = level >= LogLevel::Error ? stderr : stdout;
 
 #if LAPIS_PLATFORM_WINDOWS

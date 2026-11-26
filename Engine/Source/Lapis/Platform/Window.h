@@ -16,7 +16,7 @@ struct WindowProps {
     u32         Height = 720;
     bool        VSync  = true;
     bool        Resizable = true;
-    int         MSAASamples = 4;   // 0 = off
+    int         MSAASamples = 0;   // backbuffer MSAA (the renderer does its own offscreen MSAA)
 };
 
 class Window : NonCopyable {
