@@ -49,7 +49,7 @@ constexpr GLenum GL_CULL_FACE = 0x0B44, GL_DEPTH_TEST = 0x0B71, GL_BLEND = 0x0BE
 constexpr GLenum GL_LINE = 0x1B01, GL_FILL = 0x1B02;
 constexpr GLenum GL_VENDOR = 0x1F00, GL_RENDERER = 0x1F01, GL_VERSION = 0x1F02, GL_EXTENSIONS = 0x1F03,
                  GL_SHADING_LANGUAGE_VERSION = 0x8B8C, GL_MAJOR_VERSION = 0x821B, GL_MINOR_VERSION = 0x821C,
-                 GL_NUM_EXTENSIONS = 0x821D, GL_MAX_TEXTURE_SIZE = 0x0D33;
+                 GL_NUM_EXTENSIONS = 0x821D, GL_MAX_TEXTURE_SIZE = 0x0D33, GL_MAX_SAMPLES = 0x8D57;
 constexpr GLenum GL_UNPACK_ALIGNMENT = 0x0CF5, GL_PACK_ALIGNMENT = 0x0D05;
 constexpr GLenum GL_ARRAY_BUFFER = 0x8892, GL_ELEMENT_ARRAY_BUFFER = 0x8893, GL_UNIFORM_BUFFER = 0x8A11;
 constexpr GLenum GL_STREAM_DRAW = 0x88E0, GL_STATIC_DRAW = 0x88E4, GL_DYNAMIC_DRAW = 0x88E8;
@@ -158,6 +158,7 @@ constexpr GLenum GL_DEBUG_OUTPUT = 0x92E0, GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242,
     X(void, glDeleteRenderbuffers, (GLsizei n, const GLuint* rbos))                                    \
     X(void, glBindRenderbuffer, (GLenum target, GLuint rbo))                                           \
     X(void, glRenderbufferStorage, (GLenum target, GLenum fmt, GLsizei w, GLsizei h))                  \
+    X(void, glRenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum fmt, GLsizei w, GLsizei h)) \
     X(void, glFramebufferRenderbuffer, (GLenum target, GLenum attach, GLenum rbtarget, GLuint rbo))   \
     X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield mask, GLenum filter))
 
