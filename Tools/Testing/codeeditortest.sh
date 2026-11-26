@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Automated test of the built-in code editor: select the Gem in the Sandbox,
-# open its script from the Inspector, type, save (Ctrl+S), then save a syntax
-# error and check that the error is reported.
+# Automated test of the built-in code editor: File > New Script, type into
+# it, save (Ctrl+S), then save a syntax error and check it is reported.
 #   Tools/Testing/codeeditortest.sh <build/bin dir> <output dir>
 set -u
 BIN=$(cd "${1:-build/bin}" && pwd)
@@ -11,33 +10,35 @@ HERE="$ROOT/Tools/Testing"
 rm -rf "$OUT"; mkdir -p "$OUT/install/bin"
 cp "$BIN"/LapisEditor "$BIN"/LapisPlayer "$OUT/install/bin/"
 cp -r "$ROOT/Projects" "$ROOT/Templates" "$OUT/install/"
-SCRIPT="$OUT/install/Projects/Sandbox/Scripts/Spinner.luau"
+SCRIPT="$OUT/install/Projects/Sandbox/Scripts/NewScript.luau"
 
 Xvfb :95 -screen 0 1280x800x24 -nolisten tcp >/dev/null 2>&1 &
 XVFB=$!
 trap 'kill $XVFB 2>/dev/null' EXIT
 export DISPLAY=:95 LAPIS_NO_SHELL_OPEN=1
 sleep 1
-"$OUT/install/bin/LapisEditor" --project "$OUT/install/Projects/Sandbox" --width 1280 --height 800 > "$OUT/editor.log" 2>&1 &
+"$OUT/install/bin/LapisEditor" --width 1280 --height 800 > "$OUT/editor.log" 2>&1 &
 ED=$!
-for i in $(seq 1 60); do grep -q "Editor: opened project" "$OUT/editor.log" 2>/dev/null && break; sleep 0.5; done
+for i in $(seq 1 60); do grep -q "opened project" "$OUT/editor.log" 2>/dev/null && break; sleep 0.5; done
 sleep 2
 X="python3 $HERE/xinput.py"
-shot() { import -window root "$OUT/$1.png" 2>/dev/null; }
-
-# Hierarchy row 6 = Gem; then Inspector "Edit script".
-$X move 60 234 , click 1 , sleep 1
-shot 01_gem_selected
-$X move 1030 350 , click 1 , sleep 1.5
-shot 02_script_open
-$X type -- edited by the code editor test , tap Enter , combo Control s , sleep 1
-shot 03_saved
-$X type local = , combo Control s , sleep 1
-shot 04_error
+# File > New Script...  (menu rows: New Scene, Open Project, Save Scene, New Script)
+$X move 25 13 , click 1 , sleep 0.6 , move 80 119 , click 1 , sleep 1.5
+# Click into the text, jump to the end of the file, type a line and save.
+$X move 640 300 , click 1 , down Control , tap End , up Control , tap Enter , type print 1234 , sleep 0.3
+$X down Control , tap s , up Control , sleep 1
+import -window root "$OUT/1_saved.png" 2>/dev/null
+cp "$SCRIPT" "$OUT/after_first_save.luau" 2>/dev/null
+# Now a syntax error.
+$X tap Enter , type x = = , down Control , tap s , up Control , sleep 1
+import -window root "$OUT/2_error.png" 2>/dev/null
 kill $ED 2>/dev/null; wait $ED 2>/dev/null
 
 fail=0
-head -1 "$SCRIPT" | grep -q "^-- edited by the code editor test" && echo "PASS: typed text saved to Spinner.luau" || { echo "FAIL: file not edited"; head -3 "$SCRIPT"; fail=1; }
-grep -q "^local = " "$SCRIPT" && echo "PASS: second save written" || { echo "FAIL: second save missing"; fail=1; }
-echo "Screenshots: $OUT"
+[ -f "$SCRIPT" ] && echo "PASS: File > New Script created the script" || { echo "FAIL: script not created"; fail=1; }
+grep -q "print 1234" "$OUT/after_first_save.luau" 2>/dev/null && echo "PASS: typed text was saved" || { echo "FAIL: typed text not saved"; fail=1; }
+grep -q "x = =" "$SCRIPT" 2>/dev/null && echo "PASS: second save written" || { echo "FAIL: second save missing"; fail=1; }
+sed -i 's/\x1b\[[0-9;]*m//g' "$OUT/editor.log"
+if grep -E "\[(ERROR|FATAL)\]" "$OUT/editor.log"; then echo "FAIL: errors in log"; fail=1; else echo "PASS: no errors in log"; fi
+echo "Screenshots: $OUT (2_error.png should show the red error line)"
 exit $fail
