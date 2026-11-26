@@ -187,7 +187,6 @@ PHASE 9 - Sandbox game (engine showcase)
 PHASE 10 - Future (bigger milestones, Unreal-style)
 ------------------------------------------------------------------------------
 [ ] Audio engine (XAudio2/WASAPI: 3D sound, mixing)
-[ ] Editor: immediate-mode UI, scene hierarchy, inspector, viewport gizmos
 [ ] Skeletal animation + animation blending
 [ ] Particle system
 [ ] Scripting language (Lua) / visual scripting
@@ -195,3 +194,28 @@ PHASE 10 - Future (bigger milestones, Unreal-style)
 [ ] Terrain + level streaming
 [ ] Networking / multiplayer
 [ ] Packaging / cooking builds for distribution
+
+------------------------------------------------------------------------------
+PHASE 11 - Lapis Editor (Unreal-style)
+------------------------------------------------------------------------------
+[ ] Engine UI module: baked font, batched 2D renderer, immediate-mode widgets
+[ ] Menu bar: File / Edit / Window / Help with submenus and shortcuts
+[ ] File > Templates: First Person Character (more templates later)
+[ ] Play-in-editor: Play / Stop, scene snapshot restored on Stop
+[ ] Hierarchy + Inspector panels, selection highlight
+[ ] File > Export Game: package to Export/<Game>/<Game>.exe from the editor
+[ ] LapisEditor.bat: one double-click builds (first time) and opens the editor
+[ ] Built-in code editor for Luau scripts (syntax highlighting, errors inline)
+[ ] External editor support: open scripts in VS Code, auto-reload on save
+    (file watcher -> hot-reload changed scripts while the editor is running)
+[ ] Viewport gizmos (move / rotate / scale) and mouse picking
+[ ] Undo / redo
+[ ] Content browser (models, textures, scripts, scenes)
+
+
+
+My IDEAS:
+(added by the project owner - to do once the engine works on Windows)
+
+[ ] More GPU/CUDA enforced perfomance, higher perfomance leaving CPU with better load to take care of
+[ ] Real-Time Raytracing (CUDA BASED, and CPU BASED. MY PC CANNOT NATIVELY SUPPORT RAYTRACING THROUGH MY GPU)
