@@ -1,0 +1,7 @@
+# Lapis project - First Person Character template
+Name=FirstPerson
+StartupScene=Scenes/Main.scene
+Width=1280
+Height=720
+VSync=true
+MSAA=4
