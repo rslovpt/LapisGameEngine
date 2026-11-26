@@ -45,6 +45,12 @@ def keycode(name):
         sys.exit("xinput.py: unknown key " + name)
     return code
 
+def keycode_raw(sym_name):
+    code = xlib.XKeysymToKeycode(dpy, xlib.XStringToKeysym(sym_name.encode()))
+    if not code:
+        sys.exit("xinput.py: unknown keysym " + sym_name)
+    return code
+
 def key(name, down):
     xtst.XTestFakeKeyEvent(dpy, keycode(name), 1 if down else 0, 0)
     xlib.XFlush(dpy)
@@ -57,6 +63,20 @@ def run(cmd):
     op, a = cmd[0], cmd[1:]
     if op == "key":
         key(a[0], True); time.sleep(float(a[1]) if len(a) > 1 else 0.1); key(a[0], False)
+    elif op == "down":
+        key(a[0], True)
+    elif op == "up":
+        key(a[0], False)
+    elif op == "type":
+        for ch in " ".join(a):
+            name = {" ": "space", "(": "parenleft", ")": "parenright", "'": "apostrophe", ".": "period",
+                    "=": "equal", ",": "comma", "-": "minus", "\"": "quotedbl", ":": "colon"}.get(ch, ch)
+            shifted = ch.isupper() or ch in '()":'
+            if shifted: key("Shift", True)
+            xtst.XTestFakeKeyEvent(dpy, keycode_raw(name), 1, 0); xlib.XFlush(dpy)
+            xtst.XTestFakeKeyEvent(dpy, keycode_raw(name), 0, 0); xlib.XFlush(dpy)
+            if shifted: key("Shift", False)
+            time.sleep(0.03)
     elif op == "tap":
         key(a[0], True); time.sleep(0.12); key(a[0], False)
     elif op == "click":

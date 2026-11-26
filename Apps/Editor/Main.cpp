@@ -145,11 +145,13 @@ protected:
         const bool typing = m_ShowCode && m_Code.HasFocus();
         if (!typing) UpdateEditorCamera(dt);
         else UpdateEditorCamera(0.0f);
-        if (typing) return; // keys go to the code editor
 
-        // Shortcuts
+        // Shortcuts that also work while typing in the code editor.
         const bool ctrl = Input::IsKeyDown(Key::Control);
         if (Input::WasKeyPressed(Key::F5)) TogglePlay();
+        if (ctrl && Input::WasKeyPressed(Key::E)) { m_ShowCode = !m_ShowCode; m_Code.SetFocus(m_ShowCode); }
+        if (typing) return; // other keys go to the code editor
+
         if (m_Playing && Input::WasKeyPressed(Key::Escape) && !GetWindow().IsCursorLocked()) StopPlay();
         if (!m_Playing) {
             if (ctrl && Input::WasKeyPressed(Key::S)) SaveScene();
@@ -193,7 +195,7 @@ protected:
         }
         if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 360);
         DrawToolbar(ui, w);
-        if (m_Settings.ShowStats) DrawStats(ui, w);
+        if (m_Settings.ShowStats && !m_ShowCode) DrawStats(ui, w);
         DrawMenuBar(ui);
         ui.StatusBar(StatusText());
         UpdateExport(ui);
@@ -259,7 +261,7 @@ private:
         if (ui.BeginMenu("Window")) {
             if (ui.MenuItem("Hierarchy", "", m_Settings.ShowHierarchy)) m_Settings.ShowHierarchy = !m_Settings.ShowHierarchy;
             if (ui.MenuItem("Inspector", "", m_Settings.ShowInspector)) m_Settings.ShowInspector = !m_Settings.ShowInspector;
-            if (ui.MenuItem("Code Editor", "", m_ShowCode)) { m_ShowCode = !m_ShowCode; m_Code.SetFocus(m_ShowCode); }
+            if (ui.MenuItem("Code Editor", "Ctrl+E", m_ShowCode)) { m_ShowCode = !m_ShowCode; m_Code.SetFocus(m_ShowCode); }
             if (ui.MenuItem("Stats Overlay", "", m_Settings.ShowStats)) m_Settings.ShowStats = !m_Settings.ShowStats;
             if (ui.MenuItem("Collider View", "F1", GetScene()->DebugDrawColliders)) GetScene()->DebugDrawColliders = !GetScene()->DebugDrawColliders;
             ui.EndMenu();
@@ -409,7 +411,9 @@ private:
             "Viewport:  hold Right Mouse + move = look,  WASD = move,  Q / E = down / up\n"
             "           Shift = fast,  mouse wheel = fly speed,  Left click = select\n"
             "Keys:      F5 = Play / Stop,  Ctrl+S = Save scene,  Del = delete,  F = focus,\n"
-            "           F1 = collider view\n"
+            "           F1 = collider view,  Ctrl+E = code editor\n"
+            "Code:      Ctrl+S save (hot-reloads while playing), Ctrl+Z / Ctrl+Y undo / redo,\n"
+            "           Ctrl+C / X / V clipboard, Tab / Shift+Tab indent, Esc leaves the editor\n"
             "Play mode: the game's own controls apply; Esc releases the mouse,\n"
             "           Esc again (or F5 / Stop) returns to the editor.");
     }

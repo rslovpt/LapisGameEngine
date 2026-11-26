@@ -225,6 +225,18 @@ PHASE 10 - Future (bigger milestones, Unreal-style)
 [ ] UI system for games (HUD, menus, text rendering)
 [ ] Terrain + level streaming
 [ ] Networking / multiplayer
+
+------------------------------------------------------------------------------
+PHASE 13 - More platforms (near the end)
+------------------------------------------------------------------------------
+[~] Linux: X11 + EGL window, input, editor, player, packager already run and
+    are tested here every change; still needed: Wayland, audio, gamepad,
+    packaged builds (.AppImage/.tar.gz), Linux export from the Windows editor
+[ ] macOS: Cocoa window + Metal (or MoltenVK via the Vulkan backend; Apple's
+    OpenGL is deprecated at 4.1), .app bundles, CI build on a Mac runner
+[ ] Cross-platform export from the editor (Windows/Linux/macOS targets)
+[ ] Later: Android, iOS (mobile renderer, touch input, store packaging)
+[ ] Later: VR (OpenXR)
 [ ] Packaging / cooking builds for distribution
 [ ] "Lapis Engine" release folder - what a customer receives: editor, player,
     tools, templates, docs, Luau built in (Python not bundled: detected or
@@ -240,7 +252,7 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [x] Hierarchy + Inspector panels, selection highlight
 [x] File > Export Game: package to Export/<Game>/<Game>.exe from the editor
 [x] LapisEditor.bat: one double-click builds (first time) and opens the editor
-[ ] Built-in code editor for Luau scripts (syntax highlighting, errors inline)
+[x] Built-in code editor for Luau scripts (syntax highlighting, errors inline)
 [x] External editor support: open scripts in VS Code, auto-reload on save
     (file watcher -> hot-reload changed scripts while the editor is running)
 [ ] Viewport gizmos (move / rotate / scale) and mouse picking
