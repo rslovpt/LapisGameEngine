@@ -64,20 +64,20 @@ PHASE 2 - Math
 ------------------------------------------------------------------------------
 PHASE 3 - Platform layer
 ------------------------------------------------------------------------------
-[ ] Window abstraction (Window interface + factory)
-[ ] Win32 window (resize, close, fullscreen-friendly, DPI aware)
-[ ] WGL OpenGL 4.5 core context creation (wglCreateContextAttribsARB)
-[ ] VSync control (WGL_EXT_swap_control)
-[ ] Keyboard + mouse input (state, pressed/released this frame, deltas)
-[ ] Mouse capture / relative mode for FPS cameras
-[ ] Headless EGL backend (Linux) for automated render tests
+[x] Window abstraction (Window interface + factory)
+[x] Win32 window (resize, close, fullscreen-friendly, DPI aware)
+[x] WGL OpenGL 4.5 core context creation (wglCreateContextAttribsARB)
+[x] VSync control (WGL_EXT_swap_control)
+[x] Keyboard + mouse input (state, pressed/released this frame, deltas)
+[x] Mouse capture / relative mode for FPS cameras
+[x] Headless EGL backend (Linux) for automated render tests
 [ ] Gamepad input (XInput)
 [ ] Native Linux X11 window
 
 ------------------------------------------------------------------------------
 PHASE 4 - Renderer (OpenGL RHI + scene renderer)
 ------------------------------------------------------------------------------
-[ ] Own OpenGL function loader (no GLAD/GLEW)
+[x] Own OpenGL function loader (no GLAD/GLEW)
 [ ] Shader programs (compile/link errors logged, uniform cache)
 [ ] Vertex/index buffers, vertex arrays, vertex layouts
 [ ] Textures (2D, mipmaps, filtering), cubemaps
