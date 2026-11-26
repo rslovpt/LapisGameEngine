@@ -104,26 +104,26 @@ PHASE 4 - Renderer (OpenGL RHI + scene renderer)
 ------------------------------------------------------------------------------
 PHASE 5 - Scene / Entity Component System
 ------------------------------------------------------------------------------
-[ ] Entity registry (generational IDs, component pools)
-[ ] Core components: Name, Transform, MeshRenderer, Camera, Light
-[ ] Parent/child hierarchy with world-matrix propagation
-[ ] Scene class (create/destroy entities, find by name, update/render)
-[ ] Native scripting (ScriptComponent with OnCreate/OnUpdate/OnDestroy)
-[ ] Unit tests for ECS
+[x] Entity registry (generational IDs, component pools)
+[x] Core components: Name, Transform, MeshRenderer, Camera, Light
+[x] Parent/child hierarchy with world-matrix propagation
+[x] Scene class (create/destroy entities, find by name, update/render)
+[x] Native scripting (ScriptComponent with OnCreate/OnUpdate/OnDestroy)
+[x] Unit tests for ECS
 [ ] Prefabs
 [ ] Scene serialization to/from text files
 
 ------------------------------------------------------------------------------
 PHASE 6 - Physics
 ------------------------------------------------------------------------------
-[ ] Rigid bodies (mass, velocity, gravity, damping, static/dynamic)
-[ ] Colliders: sphere, box (AABB)
-[ ] Collision detection: sphere-sphere, box-box, sphere-box
-[ ] Collision response: impulse resolution with restitution + friction
-[ ] Positional correction (no sinking)
-[ ] Raycasts against the physics world
-[ ] Fixed timestep integration
-[ ] Unit tests for physics
+[x] Rigid bodies (mass, velocity, gravity, damping, static/dynamic)
+[x] Colliders: sphere, box (AABB)
+[x] Collision detection: sphere-sphere, box-box, sphere-box
+[x] Collision response: impulse resolution with restitution + friction
+[x] Positional correction (no sinking)
+[x] Raycasts against the physics world
+[x] Fixed timestep integration
+[x] Unit tests for physics
 [ ] Oriented boxes (SAT), capsules, mesh colliders
 [ ] Broadphase acceleration (spatial hash / BVH)
 [ ] Joints / constraints
@@ -131,9 +131,9 @@ PHASE 6 - Physics
 ------------------------------------------------------------------------------
 PHASE 7 - Assets
 ------------------------------------------------------------------------------
-[ ] OBJ model loader
+[x] OBJ model loader
 [x] TGA + BMP image loaders
-[ ] Asset manager with caching by path
+[x] Asset manager with caching by path
 [ ] PNG/JPG support
 [ ] glTF 2.0 loader (skinned meshes)
 [ ] Asset hot-reloading
@@ -150,10 +150,10 @@ PHASE 8 - Runtime / Application
 PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 ------------------------------------------------------------------------------
 [x] Vendor Luau VM + compiler (ThirdParty/luau, pinned release, MIT)
-[ ] ScriptEngine: compile + run .luau files, error reporting with line numbers
-[ ] LuauScript component: per-entity script with OnStart/OnUpdate/OnDestroy
-[ ] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time
-[ ] Script sandboxing (no os/io access) + per-script environments
+[x] ScriptEngine: compile + run .luau files, error reporting with line numbers
+[x] LuauScript component: per-entity script with OnStart/OnUpdate/OnDestroy
+[x] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time
+[x] Script sandboxing (no os/io access) + per-script environments
 [ ] Hot-reload scripts on file change
 
 ------------------------------------------------------------------------------
