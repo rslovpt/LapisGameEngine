@@ -37,6 +37,9 @@ PHASE 0 - Repository & build system
 [x] .gitignore / .gitattributes
 [x] README with build instructions
 [x] PLANS.txt checklist (this file)
+[x] Automated Linux test rig: unit tests, diagnostics, and a scripted play-test
+    in a real X11 window (Xvfb + Mesa) with synthesized keyboard/mouse input
+[ ] Windows compile check from Linux (clang + mingw-w64 headers)
 [ ] Continuous integration (GitHub Actions: Windows build + Linux tests)
 
 ------------------------------------------------------------------------------
@@ -161,24 +164,24 @@ PHASE 8c - Projects & export to standalone .exe
 ------------------------------------------------------------------------------
 [x] Project format (project.lapis: name, startup scene, window settings)
 [x] Scene files (text format: entities, components, scripts)
-[ ] LapisPlayer runtime: loads a project folder and runs it
-[ ] Packager: Export/<Game>/<Game>.exe + Content/ (copy runtime + assets)
+[x] LapisPlayer runtime: loads a project folder and runs it
+[x] Packager: Export/<Game>/<Game>.exe + Content/ (copy runtime + assets)
 [ ] Build.bat: one-click build into Binaries/
 
 ------------------------------------------------------------------------------
 PHASE 8d - Diagnostics
 ------------------------------------------------------------------------------
 [x] Log file sink (Binaries/Logs/Lapis.log, flushed per line)
-[ ] LapisDiagnostics.exe: system + GPU info, unit tests, shader compile,
+[x] LapisDiagnostics.exe: system + GPU info, unit tests, shader compile,
     render checks, screenshot, frame timing -> diagnostics_report.txt
 
 ------------------------------------------------------------------------------
 PHASE 9 - Sandbox game (engine showcase)
 ------------------------------------------------------------------------------
-[ ] Lit scene with ground, shadows, sky
-[ ] Physics playground: drop/throw boxes and spheres
-[ ] Free-fly camera
-[ ] Window title shows FPS and stats
+[x] Lit scene with ground, shadows, sky
+[x] Physics playground: drop/throw boxes and spheres
+[x] Free-fly camera
+[x] Window title shows FPS and stats
 
 ------------------------------------------------------------------------------
 PHASE 10 - Future (bigger milestones, Unreal-style)

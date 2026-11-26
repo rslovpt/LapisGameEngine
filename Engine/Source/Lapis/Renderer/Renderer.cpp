@@ -184,7 +184,7 @@ void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
     s.SetVec3("u_CameraPos", m_Camera.Position);
     s.SetVec3("u_SunDirection", Normalize(m_Sun.Direction));
     s.SetVec3("u_SunColor", m_Sun.Color * m_Sun.Intensity);
-    s.SetVec3("u_AmbientSky", m_Env.SkyZenith * m_Env.AmbientIntensity * 2.0f);
+    s.SetVec3("u_AmbientSky", m_Env.SkyZenith * m_Env.AmbientIntensity * 1.2f);
     s.SetVec3("u_AmbientGround", m_Env.SkyGround * m_Env.AmbientIntensity);
     s.SetVec3("u_FogColor", m_Env.SkyHorizon);
     s.SetFloat("u_FogDensity", m_Env.FogDensity);
