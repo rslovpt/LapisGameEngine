@@ -1,97 +1,81 @@
 # Lapis Game Engine
 
-Lapis is a from-scratch 3D game engine written in C++17 that renders with
-**OpenGL 4.5 (core profile)**. It is structured like a real engine: a static
-library (`LapisEngine`) that games link against, plus a demo game (`Sandbox`)
-and a test suite.
+Lapis is a from-scratch 3D game engine in C++17, structured like Unreal: an
+engine library, an **editor**, a game **player/runtime**, a **packager** that
+exports standalone games, and embedded **Luau** scripting for gameplay.
+Rendering uses **OpenGL 4.5 core** (DirectX 12 / Vulkan are planned).
 
-It has **no third-party dependencies**. The Win32 window, the OpenGL function
-loader, math, physics, and image/model loaders all live in this repository.
+See [`PLANS.txt`](PLANS.txt) for the roadmap/checklist and
+[`Docs/Scripting.md`](Docs/Scripting.md) for the Luau API.
 
-See [`PLANS.txt`](PLANS.txt) for the roadmap and checklist.
+## Quick start (Windows)
 
-## Features
+1. Install **Visual Studio 2022 Community** with the workload
+   **"Desktop development with C++"** (CMake comes with it).
+2. Double-click **`LapisEditor.bat`**.
+   The first run compiles everything (a few minutes), then the editor opens.
+3. In the editor: **File > Templates > First Person Character**, then press
+   **Play** (F5). **File > Export Game...** creates `Export\<Game>\<Game>.exe`.
 
-- **Core**: logging, assertions, timers, file IO, event system
-- **Math**: vectors, matrices, quaternions, AABB/ray/plane/frustum
-- **Platform**: Win32 window + WGL OpenGL 4.5 context, keyboard/mouse input,
-  headless EGL backend for automated tests on Linux
-- **Renderer**: shaders, buffers, textures, framebuffers, Blinn-Phong lighting
-  (directional + point lights), PCF shadow mapping, procedural sky, HDR +
-  tone mapping, debug lines
-- **Scene**: entity component system, transform hierarchy, native C++ scripts
-- **Physics**: rigid bodies, sphere/box colliders, impulse-based collision
-  response with friction, raycasts
+Other one-click files:
+
+| File | What it does |
+|---|---|
+| `LapisEditor.bat` | build (if needed) + open the editor |
+| `PlaySandbox.bat` | build + play the Sandbox sample without the editor |
+| `RunDiagnostics.bat` | build + run all checks, opens `Binaries\Logs\diagnostics_report.txt` |
+| `Build.bat` | just build; programs go to `Binaries\`, log to `Binaries\Logs\build_log.txt` |
+
+## Editor
+
+* **Menu bar**: File (New Scene, Open Project, Save, Templates, Settings,
+  Export Game), Edit (Play/Stop, Spawn, Duplicate, Delete), Window, Help.
+* **Play-in-editor**: Play runs the game inside the editor; Stop restores the
+  scene exactly as it was.
+* **Viewport**: hold right mouse to fly (WASD, Q/E, Shift), left click selects.
+* **Hierarchy / Inspector** panels; "Open script in external editor" opens the
+  Luau file in your default editor (e.g. VS Code).
+
+## Engine features
+
+- **Renderer**: HDR forward renderer, directional + 16 point lights, PCF
+  shadow maps, procedural sky with reflections, 4x MSAA, ACES tone mapping,
+  frustum culling, debug drawing, 2D UI/HUD with a baked font
+- **Scripting**: Luau 0.748 (vendored), sandboxed per-script environments,
+  OnStart/OnUpdate/OnCollision/OnDestroy, Entity/Scene/Input/Physics/HUD APIs
+- **Physics**: rigid bodies, box/sphere colliders, triggers, friction,
+  restitution, sleeping, raycasts, collision events
+- **Scene**: ECS with generational IDs, transform hierarchy, readable `.scene`
+  files, projects (`project.lapis`)
 - **Assets**: OBJ models, TGA/BMP textures, cached asset manager
-
-## Building (Windows)
-
-Requirements: Visual Studio 2019/2022 (Desktop development with C++) and
-CMake 3.16+ (bundled with Visual Studio).
-
-```bat
-cmake -S . -B build
-cmake --build build --config Release
-build\bin\Release\Sandbox.exe
-```
-
-Or open the folder directly in Visual Studio ("Open a local folder"); it
-detects `CMakeLists.txt` automatically. Pick `Sandbox.exe` as the startup item.
-
-### Sandbox controls
-
-| Input                  | Action                         |
-|------------------------|--------------------------------|
-| Right mouse (hold)     | Mouse look                     |
-| W A S D                | Move                           |
-| Q / E                  | Down / up                      |
-| Shift                  | Move faster                    |
-| Left mouse / Space     | Throw a sphere / drop a box    |
-| R                      | Reset the physics playground   |
-| F1                     | Toggle debug collider drawing  |
-| Esc                    | Quit                           |
-
-## Building and testing (Linux, headless)
-
-There's no Linux window yet. The engine library, unit tests, and an offscreen
-render test still build and run through EGL:
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-```
-
-The render test writes `render_test.ppm`, one frame of the test scene.
+- **Platform**: Win32 + WGL on Windows; X11 + EGL (or headless EGL) on Linux
+- **No external dependencies** besides the vendored Luau source
 
 ## Repository layout
 
 ```
-Engine/Source/Lapis/
-    Core/       logging, asserts, time, files, events
-    Math/       vectors, matrices, quaternions, geometry
-    Platform/   window + input (Win32, headless EGL)
-    Renderer/   OpenGL loader, RHI objects, scene renderer
-    Scene/      ECS, components, scene, scripts
-    Physics/    rigid bodies, colliders, solver
-    Assets/     OBJ/TGA/BMP loaders, asset manager
-    Runtime/    Application, main loop, entry point
-Sandbox/        demo game built on the engine
-Tests/          unit tests + headless render test
+Engine/Source/Lapis/   engine library (Core, Math, Platform, Renderer, Scene,
+                       Physics, Assets, Scripting, UI, Runtime)
+Apps/                  LapisEditor, LapisPlayer, LapisPackager, LapisDiagnostics
+Projects/Sandbox/      sample game project (Luau gameplay)
+Templates/             project templates (File > Templates)
+Tests/                 unit tests (also run by LapisDiagnostics)
+Tools/Testing/         Linux test rig: play-tests in a real window with
+                       synthesized input, editor click-through test,
+                       Windows compile check
+ThirdParty/            Luau (MIT), DejaVu font license
+Docs/                  scripting reference
 ```
 
-## Making a game
+## Building on Linux
 
-```cpp
-#include <Lapis/Lapis.h>
-#include <Lapis/Runtime/EntryPoint.h>
-
-class MyGame : public Lapis::Application {
-public:
-    MyGame() : Application({"My Game", 1280, 720}) {}
-    void OnInit() override { /* build your scene */ }
-    void OnUpdate(float dt) override { /* game logic */ }
-};
-
-Lapis::Application* Lapis::CreateApplication() { return new MyGame(); }
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+build/bin/LapisTests                                   # unit tests
+build/bin/LapisEditor --project Projects/Sandbox       # needs X11
+Tools/Testing/playtest.sh build/bin Projects/Sandbox   # automated play-test (Xvfb)
+Tools/Testing/editortest.sh build/bin                  # automated editor test
+Tools/Testing/windows_check.sh                         # compile-check Windows code
 ```
+
+Set `LAPIS_HEADLESS=1` to render offscreen without a display.
