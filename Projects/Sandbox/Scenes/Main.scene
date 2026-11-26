@@ -1,0 +1,58 @@
+# Lapis Scene v1 - Sandbox showcase level
+Scene name="Main"
+Environment zenith=0.16,0.32,0.75 horizon=0.7,0.8,0.95 ground=0.25,0.24,0.22 ambient=0.45 reflection=1 fog=0.006 exposure=1
+Physics gravity=0,-9.81,0
+
+Entity id=1 name="Camera"
+  Transform position=0,4,14 rotation=-12,0,0 scale=1,1,1
+  Camera fov=65 near=0.1 far=500 primary=1
+  Script path="Scripts/FlyCamera.luau"
+
+Entity id=2 name="Sun"
+  Transform position=0,10,0 rotation=-50,35,0 scale=1,1,1
+  Light type=Directional color=1,0.95,0.88 intensity=3.2 shadows=1
+
+Entity id=3 name="GameController"
+  Transform position=0,0,0
+  Script path="Scripts/GameController.luau"
+
+Entity id=4 name="Ground"
+  Transform position=0,-0.5,0 rotation=0,0,0 scale=60,1,60
+  MeshRenderer mesh="Cube" color=0.85,0.85,0.85,1 roughness=0.9 metallic=0 texture="Checker" tiling=10,10
+  Collider shape=Box
+
+Entity id=5 name="Pedestal"
+  Transform position=0,0.75,-4 scale=2,1.5,2
+  MeshRenderer mesh="Cube" color=0.3,0.32,0.38,1 roughness=0.6
+  Collider shape=Box
+
+Entity id=6 name="Gem"
+  Transform position=0,2.6,-4 scale=1.6,1.6,1.6
+  MeshRenderer mesh="Models/Gem.obj" color=0.25,0.85,0.95,1 roughness=0.15 metallic=0.6 emissive=0.02,0.12,0.16
+  Script path="Scripts/Spinner.luau"
+
+Entity id=7 name="GemLight"
+  Transform position=0,3,-4
+  Light type=Point color=0.3,0.8,1 intensity=18 range=9
+
+Entity id=8 name="OrbitLight"
+  Transform position=6,1.5,0
+  Light type=Point color=1,0.45,0.15 intensity=25 range=10
+  Script path="Scripts/Orbit.luau"
+
+Entity id=9 name="GoldBall"
+  Transform position=-6,1,-2 scale=2,2,2
+  MeshRenderer mesh="Sphere" color=1,0.78,0.34,1 roughness=0.25 metallic=1
+  Collider shape=Sphere
+  RigidBody type=Dynamic mass=8 restitution=0.2 friction=0.6
+
+Entity id=10 name="Wall"
+  Transform position=0,1.5,-14 scale=24,3,1
+  MeshRenderer mesh="Cube" color=0.55,0.5,0.45,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=11 name="Trigger"
+  Transform position=8,0.05,-6 scale=3,0.1,3
+  MeshRenderer mesh="Cube" color=0.2,0.9,0.3,1 roughness=0.5 emissive=0.05,0.4,0.1 shadows=0
+  Collider shape=Box trigger=1
+  Script path="Scripts/ColorPad.luau"

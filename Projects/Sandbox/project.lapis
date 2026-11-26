@@ -1,0 +1,8 @@
+# Lapis project file
+Name=Sandbox
+StartupScene=Scenes/Main.scene
+MainScript=Scripts/Setup.luau
+Width=1280
+Height=720
+VSync=true
+MSAA=4
