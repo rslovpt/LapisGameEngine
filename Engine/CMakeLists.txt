@@ -6,7 +6,7 @@ file(GLOB_RECURSE LAPIS_ENGINE_SOURCES CONFIGURE_DEPENDS
 
 # Platform backends are only compiled on their own platform.
 if(WIN32)
-    list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/Platform/Linux/.*")
+    list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/Platform/(Linux|Headless)/.*")
 else()
     list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/Platform/Win32/.*")
 endif()
