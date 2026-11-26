@@ -129,3 +129,63 @@ LAPIS_TEST(Scene, NativeScripts) {
         CHECK(Counter::Destroyed == 1);
     }
 }
+
+#include "Lapis/Runtime/Project.h"
+#include "Lapis/Scene/SceneSerializer.h"
+#include "Lapis/Scripting/ScriptEngine.h"
+
+LAPIS_TEST(Scene, SerializeRoundTrip) {
+    Scene a("RoundTrip");
+    a.Env.FogDensity = 0.02f;
+    a.GetPhysics().Settings.Gravity = {0, -5, 0};
+    Entity parent = a.CreateEntity("Parent \"quoted\"");
+    parent.Transform().Position = {1, 2, 3};
+    parent.Transform().SetEulerDegrees({10, 20, 0});
+    auto& mr = parent.Add<MeshRendererComponent>();
+    mr.MeshName = "Sphere";
+    mr.MaterialAsset = Material::Create("m", {0.1f, 0.2f, 0.3f, 1}, 0.7f, 1.0f);
+    parent.Add<ColliderComponent>().Shape = ColliderShape::Sphere;
+    parent.Add<RigidBodyComponent>().Mass = 4.0f;
+    Entity child = a.CreateEntity("Child");
+    a.SetParent(child, parent);
+    child.Add<LightComponent>().Range = 7.0f;
+    child.Add<CameraComponent>().Settings.FieldOfView = Radians(75.0f);
+    child.Add<LuauScriptComponent>().ScriptPath = "Scripts/My Script.luau";
+
+    const std::string text = SceneSerializer::Serialize(a);
+    Scene b;
+    std::string err;
+    CHECK(SceneSerializer::Deserialize(b, text, &err, false));
+    CHECK(b.GetName() == "RoundTrip");
+    CHECK_NEAR(b.Env.FogDensity, 0.02f);
+    CHECK_NEAR(b.GetPhysics().Settings.Gravity.y, -5.0f);
+    Entity p2 = b.FindEntityByName("Parent \"quoted\"");
+    Entity c2 = b.FindEntityByName("Child");
+    CHECK(p2 && c2);
+    if (!p2 || !c2) return;
+    CHECK(NearlyEqual(p2.Transform().Position, Vec3(1, 2, 3)));
+    CHECK(NearlyEqual(p2.Transform().GetEulerDegrees(), Vec3(10, 20, 0), 1e-2f));
+    CHECK(p2.Get<MeshRendererComponent>().MeshName == "Sphere");
+    CHECK_NEAR(p2.Get<MeshRendererComponent>().MaterialAsset->Roughness, 0.7f);
+    CHECK(p2.Get<ColliderComponent>().Shape == ColliderShape::Sphere);
+    CHECK_NEAR(p2.Get<RigidBodyComponent>().Mass, 4.0f);
+    CHECK(c2.Transform().Parent == p2.GetID());
+    CHECK_NEAR(c2.Get<LightComponent>().Range, 7.0f);
+    CHECK_NEAR(Degrees(c2.Get<CameraComponent>().Settings.FieldOfView), 75.0f);
+    CHECK(c2.Get<LuauScriptComponent>().ScriptPath == "Scripts/My Script.luau");
+
+    Scene bad;
+    CHECK(!SceneSerializer::Deserialize(bad, "Transform position=1,2,3\n", &err, false)); // component before entity
+    CHECK(!SceneSerializer::Deserialize(bad, "Entity name=\"unterminated\n", &err, false));
+}
+
+LAPIS_TEST(Scene, ProjectFile) {
+    auto p = Project::Parse("# c\nName=My Game\nStartupScene=Scenes/A.scene\nWidth=800\nVSync=false\nMSAA=2\n", "/games/x");
+    CHECK(p.has_value());
+    if (!p) return;
+    CHECK(p->Name == "My Game");
+    CHECK(p->Width == 800 && p->Height == 720);
+    CHECK(!p->VSync && p->MSAA == 2);
+    auto again = Project::Parse(p->Serialize(), p->Directory);
+    CHECK(again && again->Name == "My Game" && again->StartupScene == "Scenes/A.scene");
+}

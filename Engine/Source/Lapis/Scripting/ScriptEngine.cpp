@@ -425,6 +425,7 @@ int D_DrawLine(lua_State* L) {
 int T_Now(lua_State* L) { lua_pushnumber(L, SceneOf(L).Time); return 1; }
 int A_Quit(lua_State* L) { Engine(L).QuitRequested = true; return 0; }
 int A_SetTitle(lua_State* L) { Engine(L).RequestedTitle = luaL_checkstring(L, 1); return 0; }
+int A_LockCursor(lua_State* L) { Engine(L).CursorLockRequest = lua_toboolean(L, 1) ? 1 : 0; return 0; }
 
 void RegisterLib(lua_State* L, const char* name, std::initializer_list<luaL_Reg> funcs) {
     lua_createtable(L, 0, (int)funcs.size());
@@ -499,7 +500,7 @@ ScriptEngine::ScriptEngine(Scene* scene) : m_Scene(scene) {
                                  {"SetGravity", P_SetGravity}, {"GetGravity", P_GetGravity}});
     RegisterLib(m_L, "Debug", {{"Log", L_Print}, {"Warn", L_Warn}, {"DrawLine", D_DrawLine}});
     RegisterLib(m_L, "Time", {{"Now", T_Now}});
-    RegisterLib(m_L, "App", {{"Quit", A_Quit}, {"SetTitle", A_SetTitle}});
+    RegisterLib(m_L, "App", {{"Quit", A_Quit}, {"SetTitle", A_SetTitle}, {"LockCursor", A_LockCursor}});
 
     // The prelude defines real globals, so it runs on the main state (not sandboxed).
     {

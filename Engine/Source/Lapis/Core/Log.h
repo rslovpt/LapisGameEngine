@@ -2,6 +2,7 @@
 // Simple leveled logger with "{}" placeholder formatting:
 //     LAPIS_INFO("Loaded {} meshes in {} ms", count, ms);
 
+#include <functional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -41,6 +42,11 @@ public:
     static bool OpenFile(const std::string& path);
     static void CloseFile();
     static const std::string& GetFilePath();
+
+    // Extra sink (e.g. diagnostics capturing errors). Returns an id for removal.
+    using Listener = std::function<void(LogLevel, const std::string&)>;
+    static int  AddListener(Listener listener);
+    static void RemoveListener(int id);
 
     template <typename... Args>
     static void Print(LogLevel level, std::string_view fmt, const Args&... args) {

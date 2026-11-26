@@ -6,6 +6,7 @@
 #include <ctime>
 #include <filesystem>
 #include <mutex>
+#include <vector>
 
 #if LAPIS_PLATFORM_WINDOWS
     #ifndef WIN32_LEAN_AND_MEAN
@@ -23,6 +24,8 @@ namespace {
     LogLevel   s_Level = LogLevel::Trace;
     std::mutex s_Mutex;
     FILE*       s_File = nullptr;
+    std::vector<std::pair<int, Log::Listener>> s_Listeners;
+    int         s_NextListener = 1;
     std::string s_FilePath;
 
     const char* LevelName(LogLevel level) {
@@ -80,6 +83,18 @@ void Log::CloseFile() {
 }
 
 const std::string& Log::GetFilePath() { return s_FilePath; }
+
+int Log::AddListener(Listener listener) {
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    s_Listeners.emplace_back(s_NextListener, std::move(listener));
+    return s_NextListener++;
+}
+
+void Log::RemoveListener(int id) {
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    for (auto it = s_Listeners.begin(); it != s_Listeners.end(); ++it)
+        if (it->first == id) { s_Listeners.erase(it); return; }
+}
 LogLevel Log::GetLevel() { return s_Level; }
 
 void Log::Write(LogLevel level, const std::string& message) {
@@ -97,6 +112,7 @@ void Log::Write(LogLevel level, const std::string& message) {
     std::strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &tm);
 
     std::lock_guard<std::mutex> lock(s_Mutex);
+    for (auto& l : s_Listeners) l.second(level, message);
     if (s_File) {
         std::fprintf(s_File, "[%s] [%s] %s\n", timeBuf, LevelName(level), message.c_str());
         std::fflush(s_File);

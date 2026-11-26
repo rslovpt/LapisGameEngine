@@ -72,7 +72,7 @@ PHASE 3 - Platform layer
 [x] Mouse capture / relative mode for FPS cameras
 [x] Headless EGL backend (Linux) for automated render tests
 [ ] Gamepad input (XInput)
-[ ] Native Linux X11 window
+[x] Native Linux X11 window
 
 ------------------------------------------------------------------------------
 PHASE 4 - Renderer (OpenGL RHI + scene renderer)
@@ -111,7 +111,7 @@ PHASE 5 - Scene / Entity Component System
 [x] Native scripting (ScriptComponent with OnCreate/OnUpdate/OnDestroy)
 [x] Unit tests for ECS
 [ ] Prefabs
-[ ] Scene serialization to/from text files
+[x] Scene serialization to/from text files (.scene)
 
 ------------------------------------------------------------------------------
 PHASE 6 - Physics
@@ -141,9 +141,9 @@ PHASE 7 - Assets
 ------------------------------------------------------------------------------
 PHASE 8 - Runtime / Application
 ------------------------------------------------------------------------------
-[ ] Application base class (OnInit/OnUpdate/OnRender/OnShutdown)
-[ ] Main loop with fixed physics step + variable render step
-[ ] Layered entry point (games implement CreateApplication())
+[x] Application base class (OnInit/OnUpdate/OnRender/OnShutdown)
+[x] Main loop with fixed physics step + variable render step
+[x] Layered entry point (games implement CreateApplication())
 [ ] Fly camera controller (WASD + mouse look)
 
 ------------------------------------------------------------------------------
@@ -159,8 +159,8 @@ PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 ------------------------------------------------------------------------------
 PHASE 8c - Projects & export to standalone .exe
 ------------------------------------------------------------------------------
-[ ] Project format (project.lapis: name, startup scene, window settings)
-[ ] Scene files (text format: entities, components, scripts)
+[x] Project format (project.lapis: name, startup scene, window settings)
+[x] Scene files (text format: entities, components, scripts)
 [ ] LapisPlayer runtime: loads a project folder and runs it
 [ ] Packager: Export/<Game>/<Game>.exe + Content/ (copy runtime + assets)
 [ ] Build.bat: one-click build into Binaries/

@@ -63,6 +63,7 @@ public:
     // Set by App.Quit() from scripts; polled by the runtime.
     bool QuitRequested = false;
     std::string RequestedTitle;
+    int  CursorLockRequest = -1;   // -1 = no request, 0 = unlock, 1 = lock
 
 private:
     int  LoadModule(const std::string& path);           // returns registry ref or -1
