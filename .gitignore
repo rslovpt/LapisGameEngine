@@ -24,3 +24,5 @@ CMakeUserPresets.json
 Thumbs.db
 .DS_Store
 desktop.ini
+*.bundle
+Binaries/
