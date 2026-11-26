@@ -24,6 +24,7 @@ public:
     // --- entities ----------------------------------------------------------------
     Entity CreateEntity(const std::string& name = "Entity");
     void   DestroyEntity(Entity entity);   // deferred to the end of the frame (children too)
+    void   FlushPendingDestroys() { FlushDestroyQueue(); }
     Entity FindEntityByName(const std::string& name);
     Entity GetEntity(EntityID id) { return registry.IsValid(id) ? Entity(id, this) : Entity(); }
     void   SetParent(Entity child, Entity parent);
@@ -58,6 +59,13 @@ public:
     // Lines requested by gameplay code this frame (drawn during OnRender).
     void DebugLine(const Vec3& a, const Vec3& b, const Vec4& color) { m_DebugLines.push_back({a, b, color}); }
 
+    // 2D HUD drawn over the frame (filled by scripts each frame, consumed by the app).
+    struct HudCommand { bool IsText; float X, Y, W, H; std::string Text; Vec4 Color; float Scale; };
+    void HudText(float x, float y, const std::string& text, const Vec4& color, float scale = 1.0f) { m_Hud.push_back({true, x, y, 0, 0, text, color, scale}); }
+    void HudRect(float x, float y, float w, float h, const Vec4& color) { m_Hud.push_back({false, x, y, w, h, {}, color, 1.0f}); }
+    std::vector<HudCommand> TakeHud() { return std::move(m_Hud); }
+    Vec2 ViewportSize{1280.0f, 720.0f};   // set by the application every frame
+
     Environment Env;
     DirectionalLight DefaultSun;           // used when no directional light entity exists
     bool DebugDrawColliders = false;
@@ -79,6 +87,7 @@ private:
     Scope<AssetManager> m_Assets;
     std::vector<EntityID> m_DestroyQueue;
     std::vector<DebugLineCmd> m_DebugLines;
+    std::vector<HudCommand> m_Hud;
     u64  m_TransformFrame = 0;
     bool m_Running = false;
 };

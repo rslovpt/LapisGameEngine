@@ -17,6 +17,7 @@
         #define NOMINMAX
     #endif
     #include <windows.h>
+    #include <shellapi.h>
 #endif
 
 namespace LapisApp {
@@ -84,6 +85,20 @@ inline void AttachConsole() {
         freopen_s(&f, "CONOUT$", "w", stdout);
         freopen_s(&f, "CONOUT$", "w", stderr);
     }
+#endif
+}
+
+// Opens a file or folder with the OS default handler (Explorer, VS Code, ...).
+inline void OpenInShell(const std::string& path) {
+#if defined(_WIN32)
+    const int n = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+    std::wstring w(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, w.data(), n);
+    ShellExecuteW(nullptr, L"open", w.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+    if (std::getenv("LAPIS_NO_SHELL_OPEN")) return;
+    const std::string cmd = "xdg-open '" + path + "' >/dev/null 2>&1 &";
+    [[maybe_unused]] int r = std::system(cmd.c_str());
 #endif
 }
 

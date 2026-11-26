@@ -422,6 +422,19 @@ int D_DrawLine(lua_State* L) {
     SceneOf(L).DebugLine(CheckVec(L, 1), CheckVec(L, 2), {c.x, c.y, c.z, 1.0f});
     return 0;
 }
+int H_Text(lua_State* L) {
+    const Vec3 c = OptVec(L, 4, Vec3(1.0f));
+    SceneOf(L).HudText((float)luaL_checknumber(L, 1), (float)luaL_checknumber(L, 2), luaL_checkstring(L, 3),
+                       {c.x, c.y, c.z, (float)luaL_optnumber(L, 6, 1.0)}, (float)luaL_optnumber(L, 5, 1.0));
+    return 0;
+}
+int H_Rect(lua_State* L) {
+    const Vec3 c = OptVec(L, 5, Vec3(1.0f));
+    SceneOf(L).HudRect((float)luaL_checknumber(L, 1), (float)luaL_checknumber(L, 2), (float)luaL_checknumber(L, 3),
+                       (float)luaL_checknumber(L, 4), {c.x, c.y, c.z, (float)luaL_optnumber(L, 6, 1.0)});
+    return 0;
+}
+int H_ScreenSize(lua_State* L) { const Vec2 s = SceneOf(L).ViewportSize; lua_pushvector(L, s.x, s.y, 0); return 1; }
 int T_Now(lua_State* L) { lua_pushnumber(L, SceneOf(L).Time); return 1; }
 int A_Quit(lua_State* L) { Engine(L).QuitRequested = true; return 0; }
 int A_SetTitle(lua_State* L) { Engine(L).RequestedTitle = luaL_checkstring(L, 1); return 0; }
@@ -500,6 +513,7 @@ ScriptEngine::ScriptEngine(Scene* scene) : m_Scene(scene) {
                                  {"SetGravity", P_SetGravity}, {"GetGravity", P_GetGravity}});
     RegisterLib(m_L, "Debug", {{"Log", L_Print}, {"Warn", L_Warn}, {"DrawLine", D_DrawLine}});
     RegisterLib(m_L, "Time", {{"Now", T_Now}});
+    RegisterLib(m_L, "HUD", {{"Text", H_Text}, {"Rect", H_Rect}, {"ScreenSize", H_ScreenSize}});
     RegisterLib(m_L, "App", {{"Quit", A_Quit}, {"SetTitle", A_SetTitle}, {"LockCursor", A_LockCursor}});
 
     // The prelude defines real globals, so it runs on the main state (not sandboxed).

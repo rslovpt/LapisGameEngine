@@ -20,7 +20,7 @@ Application::~Application() {
 void Application::SetScene(Ref<Scene> scene) {
     if (m_Scene && m_Scene->IsRunning()) m_Scene->OnStop();
     m_Scene = std::move(scene);
-    if (m_Scene && m_Running) m_Scene->OnStart();
+    if (m_Scene && m_Running && m_Spec.AutoStartScene) m_Scene->OnStart();
 }
 
 bool Application::Init() {
@@ -36,6 +36,8 @@ bool Application::Init() {
         LAPIS_FATAL("Failed to initialize the renderer");
         return false;
     }
+    if (!m_UIRenderer.Init()) { LAPIS_FATAL("Failed to initialize the UI renderer"); return false; }
+    m_UI = CreateScope<UIContext>(m_UIRenderer);
     return true;
 }
 
@@ -43,6 +45,8 @@ void Application::Shutdown() {
     OnShutdown();
     if (m_Scene && m_Scene->IsRunning()) m_Scene->OnStop();
     m_Scene.reset();          // GPU resources must die before the GL context
+    m_UI.reset();
+    m_UIRenderer.Shutdown();
     m_Renderer.Shutdown();
     m_Window.reset();
     LAPIS_INFO("Lapis Engine shut down (exit code {})", m_ExitCode);
@@ -64,7 +68,7 @@ int Application::Run() {
     if (!Init()) { Shutdown(); return 1; }
     m_Running = true;
     if (!OnInit()) { LAPIS_FATAL("Application OnInit failed"); m_ExitCode = 2; Shutdown(); return m_ExitCode; }
-    if (m_Scene && !m_Scene->IsRunning()) m_Scene->OnStart();
+    if (m_Scene && !m_Scene->IsRunning() && m_Spec.AutoStartScene) m_Scene->OnStart();
 
     Timer frameTimer, titleTimer;
     u32 framesSinceTitle = 0;
@@ -109,6 +113,8 @@ int Application::Run() {
 void Application::Frame(float dt) {
     m_Time.DeltaTime = dt;
     m_Time.TotalTime += dt;
+    const Vec4 hudRect = GetGameViewport();
+    if (m_Scene) m_Scene->ViewportSize = {hudRect.z, hudRect.w};
 
     // Fixed-step simulation (bounded to avoid the spiral of death).
     m_Accumulator += dt;
@@ -127,12 +133,12 @@ void Application::Frame(float dt) {
     // Requests made by Luau scripts.
     if (m_Scene && m_Scene->GetRegistry().Count<LuauScriptComponent>() > 0) {
         ScriptEngine& se = m_Scene->GetScripts();
-        if (se.QuitRequested) { m_Running = false; se.QuitRequested = false; }
+        if (se.QuitRequested) { se.QuitRequested = false; OnScriptQuit(); }
         if (se.CursorLockRequest >= 0) { m_Window->SetCursorLocked(se.CursorLockRequest == 1); se.CursorLockRequest = -1; }
         if (!se.RequestedTitle.empty()) { m_Spec.Window.Title = se.RequestedTitle; se.RequestedTitle.clear(); }
     }
 
-    if (m_Minimized) return;
+    if (m_Minimized) { if (m_Scene) m_Scene->TakeHud(); return; }
     const float aspect = m_Window->GetAspect();
     if (m_Scene) {
         m_Scene->OnRender(m_Renderer, aspect, GetCameraOverride());
@@ -145,6 +151,16 @@ void Application::Frame(float dt) {
     }
     OnRender();
     m_Renderer.EndFrame(m_Window->GetBackbufferFBO());
+
+    m_UI->BeginFrame(m_Window->GetWidth(), m_Window->GetHeight());
+    if (m_Scene) {
+        for (const auto& cmd : m_Scene->TakeHud()) {
+            if (cmd.IsText) m_UI->TextOverlay(hudRect.x + cmd.X, hudRect.y + cmd.Y, cmd.Text, cmd.Color, cmd.Scale);
+            else m_UIRenderer.Rect(hudRect.x + cmd.X, hudRect.y + cmd.Y, cmd.W, cmd.H, cmd.Color);
+        }
+    }
+    OnUI(*m_UI);
+    m_UI->EndFrame(m_Window->GetBackbufferFBO());
     m_Window->SwapBuffers();
 }
 
