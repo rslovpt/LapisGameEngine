@@ -68,6 +68,16 @@ public:
     std::vector<HudCommand> TakeHud() { return std::move(m_Hud); }
     Vec2 ViewportSize{1280.0f, 720.0f};   // set by the application every frame
 
+    // Per-frame performance numbers (filled by the application, read by
+    // scripts through the Luau `Perf` library).
+    struct PerfStats {
+        float FPS = 0, FrameMs = 0, PhysicsMs = 0, ScriptMs = 0, RenderMs = 0;
+        u32 DrawCalls = 0, Triangles = 0, PhysicsSteps = 0;
+    } Perf;
+
+    // Folder scripts may read/write through the Luau `File` library.
+    std::string SaveDirectory;           // default: <asset root>/Saved
+
     Environment Env;
     DirectionalLight DefaultSun;           // used when no directional light entity exists
     bool DebugDrawColliders = false;
@@ -84,6 +94,7 @@ private:
 
     std::string  m_Name;
     std::string  m_AssetRoot = ".";
+    std::string  m_DefaultSave;
     PhysicsWorld m_Physics;
     Scope<ScriptEngine> m_Scripts;
     Scope<AssetManager> m_Assets;

@@ -1,0 +1,7 @@
+# Lapis stress test - rendering throughput
+Name=StressTest_Rendering
+StartupScene=Scenes/Main.scene
+Width=1280
+Height=720
+VSync=false
+MSAA=4

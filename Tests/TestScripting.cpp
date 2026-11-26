@@ -137,3 +137,28 @@ LAPIS_TEST(Luau, PhysicsRaycastFromScript) {
         assert(Physics.Raycast(Vector3.new(0, 0, 0), Vector3.new(0, 1, 0), 100) == nil)
     )"));
 }
+
+LAPIS_TEST(Luau, FileLibrarySandboxed) {
+    const std::string dir = TempDir();
+    Scene scene;
+    scene.SetAssetRoot(dir);
+    std::filesystem::remove_all(std::filesystem::path(dir) / "Saved");
+    ScriptEngine& se = scene.GetScripts();
+    CHECK(se.RunString(R"(
+        assert(File.Write("logs/run.csv", "a,b\n"))
+        assert(File.Append("logs/run.csv", "1,2\n"))
+        assert(File.Read("logs/run.csv") == "a,b\n1,2\n")
+        assert(File.Exists("logs/run.csv"))
+        assert(not File.Exists("nope.txt"))
+        assert(File.Read("nope.txt") == nil)
+        local names = File.List("logs")
+        assert(#names == 1 and names[1] == "run.csv")
+        local p = Perf.Get()
+        assert(p.Entities ~= nil and p.FPS ~= nil)
+    )"));
+    CHECK(FileSystem::Exists((std::filesystem::path(dir) / "Saved" / "logs" / "run.csv").string()));
+    // Escaping the save folder is refused.
+    CHECK(!se.RunString("File.Write('../escape.txt', 'x')"));
+    CHECK(!se.RunString("File.Write('/tmp/escape.txt', 'x')"));
+    CHECK(!se.RunString("File.Read('C:/Windows/win.ini')"));
+}

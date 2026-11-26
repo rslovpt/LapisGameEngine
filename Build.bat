@@ -42,6 +42,12 @@ if errorlevel 1 goto :failed
 
 copy /y "build\bin\Release\*.exe" "bin\" >nul
 if errorlevel 1 goto :failed
+rem Ready-to-run stress tests in Export\ (see Projects\StressTests\README.txt).
+echo [Lapis] Exporting stress test games...
+for %%T in (Physics Rendering Scripting) do (
+    "bin\LapisPackager.exe" "Projects\StressTests\%%T" "Export\StressTest_%%T" >> "%LOG%" 2>&1
+)
+
 rem Shortcut so the editor can be opened directly from now on.
 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%~dp0Lapis Editor.lnk'); $s.TargetPath='%~dp0bin\LapisEditor.exe'; $s.WorkingDirectory='%~dp0bin'; $s.Description='Lapis Editor'; $s.Save()" >nul 2>&1
 echo [Lapis] Build succeeded. Programs are in the bin folder.

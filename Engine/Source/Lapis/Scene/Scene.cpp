@@ -1,6 +1,7 @@
 #include "Lapis/Scene/Scene.h"
 
 #include <algorithm>
+#include <filesystem>
 
 #include "Lapis/Assets/AssetManager.h"
 #include "Lapis/Core/Log.h"
@@ -29,6 +30,10 @@ AssetManager& Scene::GetAssets() {
 
 void Scene::SetAssetRoot(const std::string& root) {
     m_AssetRoot = root;
+    if (SaveDirectory.empty() || SaveDirectory == m_DefaultSave) {
+        m_DefaultSave = (std::filesystem::path(root) / "Saved").lexically_normal().string();
+        SaveDirectory = m_DefaultSave;
+    }
     if (m_Assets) m_Assets->SetRoot(root);
 }
 

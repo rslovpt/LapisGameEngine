@@ -26,6 +26,9 @@ protected:
     bool OnInit() override {
         auto scene = CreateRef<Scene>(m_Project.Name);
         scene->SetAssetRoot(m_Project.Directory);
+        // Packaged game (Content/ next to the exe): save next to the exe.
+        if (std::filesystem::path(m_Project.Directory).filename() == "Content")
+            scene->SaveDirectory = (std::filesystem::path(LapisApp::ExeDir()) / "Saved").string();
         if (!m_Project.StartupScene.empty()) {
             if (!SceneSerializer::Load(*scene, m_Project.Path(m_Project.StartupScene)))
                 LAPIS_ERROR("Startup scene '{}' failed to load - starting with an empty scene", m_Project.StartupScene);

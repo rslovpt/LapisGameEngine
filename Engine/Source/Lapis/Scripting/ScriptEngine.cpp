@@ -1,13 +1,16 @@
 #include "Lapis/Scripting/ScriptEngine.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 #include "lua.h"
 #include "luacode.h"
 #include "lualib.h"
 
 #include "Lapis/Assets/AssetManager.h"
+#include "Lapis/Core/FileSystem.h"
 #include "Lapis/Core/Log.h"
 #include "Lapis/Platform/Input.h"
 #include "Lapis/Scene/Scene.h"
@@ -435,6 +438,68 @@ int H_Rect(lua_State* L) {
     return 0;
 }
 int H_ScreenSize(lua_State* L) { const Vec2 s = SceneOf(L).ViewportSize; lua_pushvector(L, s.x, s.y, 0); return 1; }
+// --- Perf -------------------------------------------------------------------------
+int Perf_Get(lua_State* L) {
+    Scene& s = SceneOf(L);
+    const auto& p = s.Perf;
+    size_t bodies = s.GetRegistry().Count<RigidBodyComponent>();
+    lua_createtable(L, 0, 12);
+    auto num = [&](const char* k, double v) { lua_pushnumber(L, v); lua_setfield(L, -2, k); };
+    num("FPS", p.FPS); num("FrameMs", p.FrameMs); num("PhysicsMs", p.PhysicsMs); num("ScriptMs", p.ScriptMs);
+    num("RenderMs", p.RenderMs); num("DrawCalls", p.DrawCalls); num("Triangles", p.Triangles);
+    num("PhysicsSteps", p.PhysicsSteps); num("Entities", (double)s.EntityCount()); num("Bodies", (double)bodies);
+    num("Contacts", (double)s.GetPhysics().GetContactCount()); num("Time", s.Time);
+    return 1;
+}
+int Perf_FPS(lua_State* L) { lua_pushnumber(L, SceneOf(L).Perf.FPS); return 1; }
+
+// --- File (sandboxed to the scene's save folder) ----------------------------------
+std::filesystem::path SafeSavePath(lua_State* L, int idx) {
+    const std::string rel = luaL_checkstring(L, idx);
+    std::filesystem::path p(rel);
+    bool ok = !rel.empty() && !p.is_absolute() && !p.has_root_name() && rel.find(':') == std::string::npos;
+    for (const auto& part : p) if (part == "..") ok = false;
+    if (!ok) luaL_error(L, "File: '%s' is not allowed (use a relative path inside the Saved folder)", rel.c_str());
+    return std::filesystem::path(SceneOf(L).SaveDirectory) / p;
+}
+bool WriteFile(lua_State* L, bool append) {
+    const auto path = SafeSavePath(L, 1);
+    size_t len = 0;
+    const char* text = luaL_checklstring(L, 2, &len);
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    std::FILE* f = std::fopen(path.string().c_str(), append ? "ab" : "wb");
+    if (!f) return false;
+    const bool ok = std::fwrite(text, 1, len, f) == len;
+    std::fclose(f);
+    return ok;
+}
+int F_Write(lua_State* L)  { lua_pushboolean(L, WriteFile(L, false)); return 1; }
+int F_Append(lua_State* L) { lua_pushboolean(L, WriteFile(L, true)); return 1; }
+int F_Read(lua_State* L) {
+    auto text = FileSystem::ReadText(SafeSavePath(L, 1).string());
+    if (text) lua_pushlstring(L, text->data(), text->size()); else lua_pushnil(L);
+    return 1;
+}
+int F_Exists(lua_State* L) { std::error_code ec; lua_pushboolean(L, std::filesystem::exists(SafeSavePath(L, 1), ec)); return 1; }
+int F_Delete(lua_State* L) { std::error_code ec; lua_pushboolean(L, std::filesystem::remove(SafeSavePath(L, 1), ec)); return 1; }
+int F_List(lua_State* L) {
+    std::filesystem::path dir = SceneOf(L).SaveDirectory;
+    if (!lua_isnoneornil(L, 1)) dir = SafeSavePath(L, 1);
+    lua_newtable(L);
+    std::error_code ec;
+    int i = 1;
+    for (auto& e : std::filesystem::directory_iterator(dir, ec)) {
+        lua_pushstring(L, e.path().filename().string().c_str());
+        lua_rawseti(L, -2, i++);
+    }
+    return 1;
+}
+int F_SaveFolder(lua_State* L) {
+    lua_pushstring(L, std::filesystem::absolute(SceneOf(L).SaveDirectory).lexically_normal().string().c_str());
+    return 1;
+}
+
 int T_Now(lua_State* L) { lua_pushnumber(L, SceneOf(L).Time); return 1; }
 int A_Quit(lua_State* L) { Engine(L).QuitRequested = true; return 0; }
 int A_SetTitle(lua_State* L) { Engine(L).RequestedTitle = luaL_checkstring(L, 1); return 0; }
@@ -513,6 +578,9 @@ ScriptEngine::ScriptEngine(Scene* scene) : m_Scene(scene) {
                                  {"SetGravity", P_SetGravity}, {"GetGravity", P_GetGravity}});
     RegisterLib(m_L, "Debug", {{"Log", L_Print}, {"Warn", L_Warn}, {"DrawLine", D_DrawLine}});
     RegisterLib(m_L, "Time", {{"Now", T_Now}});
+    RegisterLib(m_L, "Perf", {{"Get", Perf_Get}, {"FPS", Perf_FPS}});
+    RegisterLib(m_L, "File", {{"Write", F_Write}, {"Append", F_Append}, {"Read", F_Read}, {"Exists", F_Exists},
+                              {"Delete", F_Delete}, {"List", F_List}, {"SaveFolder", F_SaveFolder}});
     RegisterLib(m_L, "HUD", {{"Text", H_Text}, {"Rect", H_Rect}, {"ScreenSize", H_ScreenSize}});
     RegisterLib(m_L, "App", {{"Quit", A_Quit}, {"SetTitle", A_SetTitle}, {"LockCursor", A_LockCursor}});
 

@@ -1,0 +1,18 @@
+# Lapis Scene v1
+Scene name="ScriptingStress"
+Environment fog=0.003 exposure=1
+
+Entity id=1 name="Camera"
+  Transform position=0,40,70 rotation=-30,0,0
+  Camera fov=60 near=0.1 far=800 primary=1
+Entity id=2 name="Sun"
+  Transform rotation=-55,30,0
+  Light type=Directional color=1,0.95,0.88 intensity=3.2 shadows=1
+
+Entity id=3 name="Ground"
+  Transform position=0,-0.5,0 scale=80,1,80
+  MeshRenderer mesh="Cube" color=0.7,0.72,0.75,1 roughness=0.9 texture="Checker" tiling=16,16
+  Collider shape=Box
+
+Entity id=8 name="StressController"
+  Script path="Scripts/ScriptingStress.luau"

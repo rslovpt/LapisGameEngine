@@ -116,7 +116,12 @@ void Application::Frame(float dt) {
     const Vec4 hudRect = GetGameViewport();
     if (m_Scene) m_Scene->ViewportSize = {hudRect.z, hudRect.w};
 
+    Scene::PerfStats perf;
+    perf.FPS = m_Time.FPS;
+    perf.FrameMs = dt * 1000.0f;
+
     // Fixed-step simulation (bounded to avoid the spiral of death).
+    Timer phase;
     m_Accumulator += dt;
     int steps = 0;
     while (m_Accumulator >= m_Spec.FixedTimestep && steps < 8) {
@@ -126,9 +131,13 @@ void Application::Frame(float dt) {
         ++steps;
     }
     if (steps == 8) m_Accumulator = 0.0f;
+    perf.PhysicsMs = (float)phase.ElapsedMillis();
+    perf.PhysicsSteps = (u32)steps;
 
+    phase.Reset();
     if (m_Scene) m_Scene->OnUpdate(dt);
     OnUpdate(dt);
+    perf.ScriptMs = (float)phase.ElapsedMillis();
 
     // Requests made by Luau scripts.
     if (m_Scene && m_Scene->GetRegistry().Count<LuauScriptComponent>() > 0) {
@@ -138,7 +147,8 @@ void Application::Frame(float dt) {
         if (!se.RequestedTitle.empty()) { m_Spec.Window.Title = se.RequestedTitle; se.RequestedTitle.clear(); }
     }
 
-    if (m_Minimized) { if (m_Scene) m_Scene->TakeHud(); return; }
+    if (m_Minimized) { if (m_Scene) { m_Scene->TakeHud(); m_Scene->Perf = perf; } return; }
+    phase.Reset();
     const float aspect = m_Window->GetAspect();
     if (m_Scene) {
         m_Scene->OnRender(m_Renderer, aspect, GetCameraOverride(), m_Accumulator / m_Spec.FixedTimestep);
@@ -162,6 +172,11 @@ void Application::Frame(float dt) {
     OnUI(*m_UI);
     m_UI->EndFrame(m_Window->GetBackbufferFBO());
     m_Window->SwapBuffers();
+
+    perf.RenderMs = (float)phase.ElapsedMillis();
+    perf.DrawCalls = m_Renderer.GetStats().DrawCalls;
+    perf.Triangles = m_Renderer.GetStats().Triangles;
+    if (m_Scene) m_Scene->Perf = perf;
 }
 
 bool Application::SaveScreenshot(const std::string& path) {
