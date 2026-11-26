@@ -13,6 +13,9 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include <algorithm>
+#include <cstdlib>
+
 namespace Lapis {
 
 // --- WGL extension constants / types (from wglext.h) ------------------------
@@ -111,6 +114,18 @@ namespace {
         return ok;
     }
 
+    // Per-window DPI (Windows 10+), falling back to the system DPI.
+    UINT WindowDpi(HWND hwnd) {
+        using GetDpiForWindowFn = UINT(WINAPI*)(HWND);
+        static auto fn = reinterpret_cast<GetDpiForWindowFn>(
+            reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow")));
+        if (fn && hwnd) { const UINT dpi = fn(hwnd); if (dpi) return dpi; }
+        HDC dc = GetDC(nullptr);
+        const int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+        if (dc) ReleaseDC(nullptr, dc);
+        return dpi > 0 ? (UINT)dpi : 96;
+    }
+
     int MouseButtonFromMessage(UINT msg, WPARAM wParam) {
         switch (msg) {
             case WM_LBUTTONDOWN: case WM_LBUTTONUP: return 0;
@@ -169,6 +184,11 @@ public:
 
     void* GetNativeHandle() const override { return m_Hwnd; }
 
+    float GetContentScale() const override {
+        if (std::getenv("LAPIS_UI_SCALE")) return Window::GetContentScale();
+        return (float)WindowDpi(m_Hwnd) / 96.0f;
+    }
+
 private:
     static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     LRESULT WndProc(UINT msg, WPARAM wParam, LPARAM lParam);
@@ -202,6 +222,16 @@ bool Win32Window::Init() {
     wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     wc.lpszClassName = kWindowClass;
     RegisterClassExW(&wc);
+
+    // The requested size is in "100% scale" units: grow it with the display
+    // scale so windows look the same size on high-DPI monitors, but keep it
+    // within the screen.
+    {
+        const float dpiScale = (float)WindowDpi(nullptr) / 96.0f;
+        const float maxW = GetSystemMetrics(SM_CXSCREEN) * 0.92f, maxH = GetSystemMetrics(SM_CYSCREEN) * 0.88f;
+        const float fit = std::min({dpiScale, maxW / (float)m_Props.Width, maxH / (float)m_Props.Height});
+        if (fit > 1.0f) { m_Props.Width = (u32)(m_Props.Width * fit); m_Props.Height = (u32)(m_Props.Height * fit); }
+    }
 
     DWORD style = WS_OVERLAPPEDWINDOW;
     if (!m_Props.Resizable) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);

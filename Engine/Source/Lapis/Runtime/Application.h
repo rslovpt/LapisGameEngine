@@ -64,9 +64,15 @@ protected:
     // A script called App.Quit(). Games quit; the editor stops play mode instead.
     virtual void OnScriptQuit() { Quit(); }
 
-    // Screen rectangle (x, y, w, h) the game's HUD is drawn into. The editor
-    // shrinks it so menus/toolbars don't cover the game's HUD.
-    virtual Vec4 GetGameViewport() { return {0, 0, (float)m_Window->GetWidth(), (float)m_Window->GetHeight()}; }
+    // UI scale (pixels per UI unit). Default: the monitor's DPI scale.
+    virtual float GetUIScale() { return m_Window->GetContentScale(); }
+
+    // Rectangle (x, y, w, h) in UI units that the game's HUD is drawn into.
+    // The editor shrinks it so menus/toolbars don't cover the game's HUD.
+    virtual Vec4 GetGameViewport() {
+        const float s = GetUIScale();
+        return {0, 0, m_Window->GetWidth() / s, m_Window->GetHeight() / s};
+    }
 
     // Camera override for the scene (e.g. an editor camera). nullptr = scene camera.
     virtual const CameraView* GetCameraOverride() { return nullptr; }

@@ -9,6 +9,7 @@
 // The project is validated first: scenes must parse, referenced models,
 // textures and scripts must exist and every .luau file must compile.
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -28,8 +29,13 @@ struct Result {
 // Validation only (no files written).
 Result Validate(const Project& project);
 
+// Progress callback: fraction 0..1 and a short description of the current step.
+// Called from the thread that runs Package().
+using ProgressFn = std::function<void(float fraction, const std::string& step)>;
+
 // Validates, then writes the packaged game. runtimePath = LapisPlayer executable.
-Result Package(const Project& project, const std::string& runtimePath, const std::string& outputDir);
+Result Package(const Project& project, const std::string& runtimePath, const std::string& outputDir,
+               const ProgressFn& progress = nullptr);
 
 // "My Game!" -> "My_Game_"
 std::string SafeName(const std::string& name);

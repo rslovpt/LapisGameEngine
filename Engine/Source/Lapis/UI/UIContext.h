@@ -34,17 +34,24 @@ struct UIStyle {
     Vec4 Button{0.22f, 0.23f, 0.26f, 1.0f};
     Vec4 Border{0.05f, 0.05f, 0.06f, 1.0f};
     Vec4 Accent{0.35f, 0.65f, 1.0f, 1.0f};
-    float BarHeight = 26.0f;
-    float ItemHeight = 24.0f;
+    Vec4 ShadowColor{0.0f, 0.0f, 0.0f, 0.45f};
+    float BarHeight = 28.0f;
+    float ItemHeight = 25.0f;
     float Padding = 8.0f;
+    float Rounding = 4.0f;
+    float PopupRounding = 6.0f;
 };
 
 class UIContext : NonCopyable {
 public:
     explicit UIContext(UIRenderer& renderer) : m_R(renderer) {}
 
-    // Mouse state comes from Lapis::Input.
-    void BeginFrame(u32 width, u32 height);
+    // Mouse state comes from Lapis::Input. width/height in pixels; scale =
+    // UI scale (DPI scale x user preference). All widget coordinates are in
+    // logical UI units (pixels / scale).
+    void BeginFrame(u32 width, u32 height, float scale = 1.0f);
+    float Width() const { return m_Width; }
+    float Height() const { return m_Height; }
     void EndFrame(u32 targetFBO);
 
     // True when the mouse is over UI (or a menu/modal is open): the game or
@@ -76,6 +83,8 @@ public:
     // --- modal message box ----------------------------------------------------------
     void OpenMessage(const std::string& title, const std::string& text);
     bool IsMessageOpen() const { return !m_MessageTitle.empty(); }
+    // Centered progress window (call every frame while work is running).
+    void ProgressDialog(const std::string& title, const std::string& step, float fraction);
 
     // --- misc -------------------------------------------------------------------
     void StatusBar(const std::string& text);
@@ -86,7 +95,7 @@ public:
 
 private:
     struct Rect { float X, Y, W, H; bool Contains(const Vec2& p) const { return p.x >= X && p.x < X + W && p.y >= Y && p.y < Y + H; } };
-    struct MenuLevel { float X, Y, W, CursorY; size_t Background; std::string Label; };
+    struct MenuLevel { float X, Y, W, CursorY; size_t Shadow, Background; std::string Label; };
 
     bool Hovered(const Rect& r) const;   // hover allowed for the current layer
     bool Clicked(const Rect& r) const;
@@ -97,7 +106,7 @@ private:
     Vec2 m_Mouse;
     bool m_MouseDown = false, m_MousePressed = false, m_MouseReleased = false;
     bool m_WantsMouse = false;
-    u32  m_Width = 1, m_Height = 1;
+    float m_Width = 1, m_Height = 1;
 
     // Menus
     std::vector<std::string> m_OpenPath;        // labels of open menus, outermost first

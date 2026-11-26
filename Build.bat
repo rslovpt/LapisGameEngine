@@ -1,14 +1,14 @@
 @echo off
 rem ==========================================================================
 rem  Lapis Engine - Build.bat
-rem  Compiles the engine, editor, player and tools (Release) into Binaries\.
+rem  Compiles the engine, editor, player and tools (Release) into bin\.
 rem  Needs Visual Studio 2022 (or 2019) with "Desktop development with C++".
-rem  Full build output: Binaries\Logs\build_log.txt
+rem  Full build output: bin\Logs\build_log.txt
 rem ==========================================================================
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
-if not exist "Binaries\Logs" mkdir "Binaries\Logs"
-set "LOG=%~dp0Binaries\Logs\build_log.txt"
+if not exist "bin\Logs" mkdir "bin\Logs"
+set "LOG=%~dp0bin\Logs\build_log.txt"
 
 rem --- find CMake (PATH first, then the copy bundled with Visual Studio) -----
 set "CMAKE_EXE="
@@ -32,7 +32,7 @@ if not defined CMAKE_EXE (
     exit /b 1
 )
 
-echo [Lapis] Configuring...   (log: Binaries\Logs\build_log.txt)
+echo [Lapis] Configuring...   (log: bin\Logs\build_log.txt)
 "%CMAKE_EXE%" -S . -B build -A x64 > "%LOG%" 2>&1
 if errorlevel 1 goto :failed
 
@@ -40,9 +40,12 @@ echo [Lapis] Compiling...     (first build takes a few minutes)
 "%CMAKE_EXE%" --build build --config Release --parallel >> "%LOG%" 2>&1
 if errorlevel 1 goto :failed
 
-copy /y "build\bin\Release\*.exe" "Binaries\" >nul
+copy /y "build\bin\Release\*.exe" "bin\" >nul
 if errorlevel 1 goto :failed
-echo [Lapis] Build succeeded. Programs are in the Binaries folder.
+rem Shortcut so the editor can be opened directly from now on.
+powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%~dp0Lapis Editor.lnk'); $s.TargetPath='%~dp0bin\LapisEditor.exe'; $s.WorkingDirectory='%~dp0bin'; $s.Description='Lapis Editor'; $s.Save()" >nul 2>&1
+echo [Lapis] Build succeeded. Programs are in the bin folder.
+echo [Lapis] Next time you can open the editor with the "Lapis Editor" shortcut.
 exit /b 0
 
 :failed
@@ -51,7 +54,7 @@ echo  [Lapis] BUILD FAILED. Last lines of the log:
 echo  ------------------------------------------------------------------------
 powershell -NoProfile -Command "Get-Content -Tail 30 '%LOG%'"
 echo  ------------------------------------------------------------------------
-echo  Full log: Binaries\Logs\build_log.txt  (Claude can read it from your folder)
+echo  Full log: bin\Logs\build_log.txt  (Claude can read it from your folder)
 echo.
 pause
 exit /b 1

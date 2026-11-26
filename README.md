@@ -23,8 +23,8 @@ Other one-click files:
 |---|---|
 | `LapisEditor.bat` | build (if needed) + open the editor |
 | `PlaySandbox.bat` | build + play the Sandbox sample without the editor |
-| `RunDiagnostics.bat` | build + run all checks, opens `Binaries\Logs\diagnostics_report.txt` |
-| `Build.bat` | just build; programs go to `Binaries\`, log to `Binaries\Logs\build_log.txt` |
+| `RunDiagnostics.bat` | build + run all checks, opens `bin\Logs\diagnostics_report.txt` |
+| `Build.bat` | just build; programs go to `bin\`, log to `bin\Logs\build_log.txt` |
 
 ## Editor
 

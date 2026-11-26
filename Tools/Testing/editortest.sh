@@ -40,7 +40,7 @@ shot 06_stopped
 $X move 25 13 , click 1 , sleep 0.8
 shot 07_file_menu
 # File > Export Game...  (items: New, Open, Save, sep, Templates, sep, Settings, Export)
-$X move 80 172 , sleep 0.5 , click 1 , sleep 4
+$X move 80 183 , sleep 0.5 , click 1 , sleep 4
 shot 08_exported
 $X tap Enter , sleep 0.5 , key Alt 0.1
 kill $ED 2>/dev/null; wait $ED 2>/dev/null

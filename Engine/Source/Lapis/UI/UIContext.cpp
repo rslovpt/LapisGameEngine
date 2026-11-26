@@ -1,5 +1,6 @@
 #include "Lapis/UI/UIContext.h"
 
+#include <algorithm>
 #include <sstream>
 
 #include "Lapis/Platform/Input.h"
@@ -10,12 +11,12 @@ namespace {
     constexpr float PopupWidth = 250.0f;
 }
 
-void UIContext::BeginFrame(u32 width, u32 height) {
-    m_Width = width;
-    m_Height = height;
-    m_R.Begin(width, height);
+void UIContext::BeginFrame(u32 width, u32 height, float scale) {
+    m_R.Begin(width, height, scale);
+    m_Width = m_R.GetWidth();
+    m_Height = m_R.GetHeight();
 
-    m_Mouse = Input::GetMousePosition();
+    m_Mouse = Input::GetMousePosition() / m_R.GetScale();
     m_MouseDown = Input::IsMouseDown(MouseButton::Left);
     m_MousePressed = Input::WasMousePressed(MouseButton::Left);
     m_MouseReleased = Input::WasMouseReleased(MouseButton::Left);
@@ -58,7 +59,7 @@ bool UIContext::Clicked(const Rect& r) const { return m_MousePressed && Hovered(
 // Menu bar
 // =============================================================================
 bool UIContext::BeginMenuBar() {
-    const Rect bar{0, 0, (float)m_Width, Style.BarHeight};
+    const Rect bar{0, 0, m_Width, Style.BarHeight};
     m_R.Rect(bar.X, bar.Y, bar.W, bar.H, Style.Bar);
     m_R.Rect(0, bar.H - 1, bar.W, 1, Style.Border);
     AddHitRect(bar);
@@ -90,11 +91,12 @@ bool UIContext::BeginMenu(const std::string& label, bool enabled) {
             m_OpenPath = {label};   // slide between menus while one is open
             nowOpen = true;
         }
-        if (nowOpen || hovered) m_R.Rect(r.X, r.Y + 2, r.W, r.H - 4, nowOpen ? Style.Active : Style.Button);
+        if (nowOpen || hovered) m_R.Rect(r.X + 1, r.Y + 3, r.W - 2, r.H - 6, nowOpen ? Style.Active : Style.Button, Style.Rounding);
         m_R.Text(r.X + 9, (Style.BarHeight - m_R.LineHeight()) * 0.5f, label, enabled ? Style.Text : Style.TextDim);
         if (!nowOpen) return false;
 
-        m_MenuStack.push_back({r.X, Style.BarHeight, PopupWidth, Style.BarHeight + 4, m_R.ReserveRect(), label});
+        const size_t shadow = m_R.ReserveShadow();
+        m_MenuStack.push_back({r.X, Style.BarHeight, PopupWidth, Style.BarHeight + 4, shadow, m_R.ReserveRect(), label});
         m_BuildingPopup = true;
         return true;
     }
@@ -111,12 +113,13 @@ bool UIContext::BeginMenu(const std::string& label, bool enabled) {
     }
     const bool nowOpen = enabled && m_OpenPath.size() > depth && m_OpenPath[depth] == label;
     if (hovered && m_MousePressed) m_MenuClickConsumed = true;
-    if (nowOpen || hovered) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Hover);
+    if (nowOpen || hovered) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Hover, Style.Rounding);
     m_R.Text(r.X + 22, r.Y + textY, label, enabled ? Style.Text : Style.TextDim);
     m_R.Text(r.X + r.W - 16, r.Y + textY, ">", Style.TextDim);
     if (!nowOpen) return false;
 
-    m_MenuStack.push_back({lvl.X + lvl.W - 2, r.Y - 4, PopupWidth, r.Y, m_R.ReserveRect(), label});
+    const size_t shadow = m_R.ReserveShadow();
+    m_MenuStack.push_back({lvl.X + lvl.W - 2, r.Y - 4, PopupWidth, r.Y, shadow, m_R.ReserveRect(), label});
     return true;
 }
 
@@ -125,8 +128,9 @@ void UIContext::EndMenu() {
     const MenuLevel lvl = m_MenuStack.back();
     m_MenuStack.pop_back();
     const float h = lvl.CursorY - lvl.Y + 4;
-    m_R.SetRect(lvl.Background, lvl.X, lvl.Y, lvl.W, h, Style.Popup);
-    m_R.RectOutline(lvl.X, lvl.Y, lvl.W, h, Style.Border);
+    m_R.SetShadow(lvl.Shadow, lvl.X + 2, lvl.Y + 4, lvl.W, h, Style.PopupRounding, 10.0f, Style.ShadowColor);
+    m_R.SetRect(lvl.Background, lvl.X, lvl.Y, lvl.W, h, Style.Popup, Style.PopupRounding);
+    m_R.RectOutline(lvl.X, lvl.Y, lvl.W, h, Style.Border, 1.0f, Style.PopupRounding);
     m_PopupRects.push_back({lvl.X, lvl.Y, lvl.W, h});
     m_BuildingPopup = !m_MenuStack.empty();
 }
@@ -141,8 +145,8 @@ bool UIContext::MenuItem(const std::string& label, const std::string& shortcut, 
 
     const bool hovered = Hovered(r);
     if (hovered && m_OpenPath.size() > depth) m_OpenPath.resize(depth); // close sibling submenus
-    if (hovered && enabled) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Hover);
-    if (checked) m_R.Rect(r.X + 7, r.Y + r.H * 0.5f - 4, 8, 8, Style.Accent);
+    if (hovered && enabled) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Hover, Style.Rounding);
+    if (checked) m_R.Rect(r.X + 7, r.Y + r.H * 0.5f - 4, 8, 8, Style.Accent, 2.0f);
     m_R.Text(r.X + 22, textY, label, enabled ? Style.Text : Style.TextDim);
     if (!shortcut.empty()) m_R.Text(r.X + r.W - 10 - m_R.TextWidth(shortcut), textY, shortcut, Style.TextDim);
 
@@ -196,7 +200,7 @@ bool UIContext::Button(const std::string& label, float width) {
     if (y + Style.ItemHeight > m_Panel.Y + m_Panel.H) return false;
     const Rect r{x, y, w, Style.ItemHeight - 2};
     const bool hovered = Hovered(r);
-    m_R.Rect(r.X, r.Y, r.W, r.H, hovered ? (m_MouseDown ? Style.Active : Style.Hover) : Style.Button);
+    m_R.Rect(r.X, r.Y, r.W, r.H, hovered ? (m_MouseDown ? Style.Active : Style.Hover) : Style.Button, Style.Rounding);
     m_R.Text(r.X + (w - m_R.TextWidth(label)) * 0.5f, r.Y + (r.H - m_R.LineHeight()) * 0.5f, label, Style.Text);
     s_LastRight = x + w;
     s_LastY = y;
@@ -208,8 +212,8 @@ bool UIContext::Selectable(const std::string& label, bool selected) {
     if (m_CursorY + Style.ItemHeight > m_Panel.Y + m_Panel.H) return false;
     const Rect r{m_Panel.X + 2, m_CursorY, m_Panel.W - 4, Style.ItemHeight - 2};
     const bool hovered = Hovered(r);
-    if (selected) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Active);
-    else if (hovered) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Button);
+    if (selected) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Active, Style.Rounding);
+    else if (hovered) m_R.Rect(r.X, r.Y, r.W, r.H, Style.Button, Style.Rounding);
     m_R.Text(m_CursorX, r.Y + (r.H - m_R.LineHeight()) * 0.5f, label, Style.Text);
     m_CursorY += Style.ItemHeight;
     return hovered && m_MousePressed;
@@ -219,8 +223,8 @@ bool UIContext::ButtonAt(const std::string& label, float x, float y, float w, fl
     const Rect r{x, y, w, h};
     AddHitRect(r);
     const bool hovered = Hovered(r);
-    m_R.Rect(x, y, w, h, active ? Style.Active : hovered ? Style.Hover : Style.Button);
-    m_R.RectOutline(x, y, w, h, Style.Border);
+    m_R.Rect(x, y, w, h, active ? Style.Active : hovered ? Style.Hover : Style.Button, Style.Rounding + 1);
+    m_R.RectOutline(x, y, w, h, Style.Border, 1.0f, Style.Rounding + 1);
     m_R.Text(x + (w - m_R.TextWidth(label)) * 0.5f, y + (h - m_R.LineHeight()) * 0.5f, label, Style.Text);
     return hovered && m_MousePressed;
 }
@@ -244,27 +248,49 @@ void UIContext::DrawMessage() {
     const float w = std::max(320.0f, textW + 40.0f);
     const float h = Style.ItemHeight + 16 + lines.size() * (m_R.LineHeight() + 2) + 50;
     const float x = (m_Width - w) * 0.5f, y = (m_Height - h) * 0.5f;
-    m_R.Rect(0, 0, (float)m_Width, (float)m_Height, {0, 0, 0, 0.45f});
-    m_R.Rect(x, y, w, h, Style.Popup);
-    m_R.Rect(x, y, w, Style.ItemHeight, Style.PanelHeader);
-    m_R.RectOutline(x, y, w, h, Style.Border);
+    m_R.Rect(0, 0, m_Width, m_Height, {0, 0, 0, 0.45f});
+    m_R.Shadow(x + 3, y + 6, w, h, 8.0f, 16.0f, Style.ShadowColor);
+    m_R.Rect(x, y, w, h, Style.Popup, 8.0f);
+    m_R.Rect(x, y, w, Style.ItemHeight + 8, Style.PanelHeader, 8.0f);
+    m_R.Rect(x, y + Style.ItemHeight, w, 8, Style.Popup);
+    m_R.RectOutline(x, y, w, h, Style.Border, 1.0f, 8.0f);
     m_R.Text(x + 12, y + (Style.ItemHeight - m_R.LineHeight()) * 0.5f, m_MessageTitle, Style.Text);
     float ty = y + Style.ItemHeight + 12;
     for (const auto& l : lines) { m_R.Text(x + 20, ty, l, Style.Text); ty += m_R.LineHeight() + 2; }
 
     const Rect ok{x + w - 100, y + h - 36, 84, 26};
     const bool hovered = ok.Contains(m_Mouse);
-    m_R.Rect(ok.X, ok.Y, ok.W, ok.H, hovered ? Style.Hover : Style.Button);
+    m_R.Rect(ok.X, ok.Y, ok.W, ok.H, hovered ? Style.Hover : Style.Button, Style.Rounding + 1);
     m_R.Text(ok.X + (ok.W - m_R.TextWidth("OK")) * 0.5f, ok.Y + (ok.H - m_R.LineHeight()) * 0.5f, "OK", Style.Text);
     if ((hovered && m_MousePressed) || Input::WasKeyPressed(Key::Enter)) { m_MessageTitle.clear(); m_MessageText.clear(); }
 }
 
+void UIContext::ProgressDialog(const std::string& title, const std::string& step, float fraction) {
+    fraction = Clamp(fraction, 0.0f, 1.0f);
+    const float w = 460.0f, h = 128.0f;
+    const float x = (m_Width - w) * 0.5f, y = (m_Height - h) * 0.5f;
+    m_R.Rect(0, 0, m_Width, m_Height, {0, 0, 0, 0.35f});
+    m_R.Shadow(x + 3, y + 6, w, h, 8.0f, 16.0f, Style.ShadowColor);
+    m_R.Rect(x, y, w, h, Style.Popup, 8.0f);
+    m_R.RectOutline(x, y, w, h, Style.Border, 1.0f, 8.0f);
+    m_R.Text(x + 16, y + 14, title, Style.Text, 1.1f);
+    const std::string pct = std::to_string((int)(fraction * 100.0f + 0.5f)) + "%";
+    const float barX = x + 20, barY = y + 50, barW = w - 40, barH = 22;
+    m_R.Rect(barX, barY, barW, barH, Style.Button, barH * 0.5f);
+    if (fraction > 0.0f) m_R.Rect(barX, barY, std::max(barW * fraction, barH), barH, Style.Hover, barH * 0.5f);
+    m_R.Text(barX + (barW - m_R.TextWidth(pct)) * 0.5f, barY + (barH - m_R.LineHeight()) * 0.5f, pct, Style.Text);
+    std::string shown = step;
+    while (shown.size() > 4 && m_R.TextWidth(shown) > barW) shown = "..." + shown.substr(4);
+    m_R.Text(barX, barY + barH + 12, shown, Style.TextDim);
+    AddHitRect({0, 0, m_Width, m_Height});
+}
+
 void UIContext::StatusBar(const std::string& text) {
     const float h = 22.0f, y = m_Height - h;
-    m_R.Rect(0, y, (float)m_Width, h, Style.Bar);
-    m_R.Rect(0, y, (float)m_Width, 1, Style.Border);
+    m_R.Rect(0, y, m_Width, h, Style.Bar);
+    m_R.Rect(0, y, m_Width, 1, Style.Border);
     m_R.Text(8, y + (h - m_R.LineHeight()) * 0.5f, text, Style.TextDim);
-    AddHitRect({0, y, (float)m_Width, h});
+    AddHitRect({0, y, m_Width, h});
 }
 
 void UIContext::TextOverlay(float x, float y, const std::string& text, const Vec4& color, float scale, bool shadow) {

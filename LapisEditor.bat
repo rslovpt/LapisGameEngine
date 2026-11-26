@@ -6,4 +6,4 @@ rem ==========================================================================
 cd /d "%~dp0"
 call "%~dp0Build.bat"
 if errorlevel 1 exit /b 1
-start "" "%~dp0Binaries\LapisEditor.exe"
+start "" "%~dp0bin\LapisEditor.exe"

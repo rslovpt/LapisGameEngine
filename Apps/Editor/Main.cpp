@@ -8,6 +8,9 @@
 // Usage: LapisEditor [--project <dir>] [--frames N] [--screenshot f.bmp]
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
+#include <thread>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -33,6 +36,7 @@ struct EditorSettings {
     bool ShowHierarchy = true;
     bool ShowInspector = true;
     float CameraSpeed = 8.0f;
+    float UIScale = 1.0f;     // multiplier on top of the monitor's DPI scale
 
     static fs::path File() { return fs::path(LapisApp::ExeDir()) / "LapisEditor.ini"; }
 
@@ -49,12 +53,13 @@ struct EditorSettings {
             else if (k == "ShowHierarchy") ShowHierarchy = v == "1";
             else if (k == "ShowInspector") ShowInspector = v == "1";
             else if (k == "CameraSpeed") { try { CameraSpeed = std::stof(v); } catch (...) {} }
+            else if (k == "UIScale") { try { UIScale = Clamp(std::stof(v), 0.5f, 3.0f); } catch (...) {} }
         }
     }
     void Save() const {
         std::ofstream out(File());
         out << "LastProject=" << LastProject << "\nVSync=" << VSync << "\nShowStats=" << ShowStats
-            << "\nShowHierarchy=" << ShowHierarchy << "\nShowInspector=" << ShowInspector << "\nCameraSpeed=" << CameraSpeed << "\n";
+            << "\nShowHierarchy=" << ShowHierarchy << "\nShowInspector=" << ShowInspector << "\nCameraSpeed=" << CameraSpeed << "\nUIScale=" << UIScale << "\n";
     }
 };
 
@@ -94,13 +99,19 @@ protected:
         return true;
     }
 
-    void OnShutdown() override { m_Settings.Save(); }
+    void OnShutdown() override {
+        if (m_Export.Thread.joinable()) m_Export.Thread.join();
+        m_Settings.Save();
+    }
 
     void OnScriptQuit() override { if (m_Playing) StopPlay(); }
 
+    float GetUIScale() override { return GetWindow().GetContentScale() * m_Settings.UIScale; }
+
     Vec4 GetGameViewport() override {
-        const float top = 26.0f + 36.0f, bottom = 22.0f;
-        return {0, top, (float)GetWindow().GetWidth(), (float)GetWindow().GetHeight() - top - bottom};
+        const float s = GetUIScale();
+        const float top = GetUI().Style.BarHeight + ToolbarHeight, bottom = 22.0f;
+        return {0, top, GetWindow().GetWidth() / s, GetWindow().GetHeight() / s - top - bottom};
     }
 
     const CameraView* GetCameraOverride() override {
@@ -132,6 +143,12 @@ protected:
 
     void OnRender() override {
         if (m_Playing) return;
+        // Light icons so invisible point lights can be found in the viewport.
+        GetScene()->GetRegistry().Each<LightComponent, TransformComponent>([&](EntityID, LightComponent& l, TransformComponent& t) {
+            if (l.Type != LightType::Point) return;
+            const Vec3 c = Normalize(l.Color) * 1.2f;
+            GetRenderer().DrawWireSphere(t.WorldPosition(), 0.25f, {c.x, c.y, c.z, 1});
+        });
         Entity e = GetScene()->GetEntity(m_Selected);
         if (!e) return;
         Renderer& r = GetRenderer();
@@ -143,16 +160,17 @@ protected:
     }
 
     void OnUI(UIContext& ui) override {
-        const float w = (float)GetWindow().GetWidth(), h = (float)GetWindow().GetHeight();
-        const float top = ui.Style.BarHeight + 36.0f, bottom = 22.0f;
+        const float w = ui.Width(), h = ui.Height();
+        const float top = ui.Style.BarHeight + ToolbarHeight, bottom = 22.0f;
 
         if (m_Settings.ShowHierarchy && !m_Playing) DrawHierarchy(ui, 0, top, 250, h - top - bottom);
         if (m_Settings.ShowInspector && !m_Playing) DrawInspector(ui, w - 300, top, 300, h - top - bottom);
-        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 210, top + 30, 420, 300);
+        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 360);
         DrawToolbar(ui, w);
         if (m_Settings.ShowStats) DrawStats(ui, w);
         DrawMenuBar(ui);
         ui.StatusBar(StatusText());
+        UpdateExport(ui);
     }
 
 private:
@@ -185,7 +203,7 @@ private:
             }
             ui.MenuSeparator();
             if (ui.MenuItem("Settings...")) m_ShowSettings = !m_ShowSettings;
-            if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Project.Directory.empty())) ExportGame();
+            if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Project.Directory.empty() && !m_Export.Running)) ExportGame();
             if (ui.MenuItem("Open Project Folder", "", false, !m_Project.Directory.empty())) LapisApp::OpenInShell(m_Project.Directory);
             ui.MenuSeparator();
             if (ui.MenuItem("Exit", "Alt+F4")) Quit();
@@ -232,13 +250,13 @@ private:
     void DrawToolbar(UIContext& ui, float width) {
         const float y = ui.Style.BarHeight;
         UIRenderer& r = ui.Renderer();
-        r.Rect(0, y, width, 36, {0.09f, 0.095f, 0.11f, 0.96f});
-        const float bw = 90, x = width * 0.5f - bw - 4;
-        if (ui.ButtonAt(m_Playing ? "Playing" : "Play", x, y + 5, bw, 26, m_Playing) && !m_Playing) StartPlay();
-        if (ui.ButtonAt("Stop", x + bw + 8, y + 5, bw, 26) && m_Playing) StopPlay();
+        r.Rect(0, y, width, ToolbarHeight, {0.09f, 0.095f, 0.11f, 0.96f});
+        const float bw = 92, x = width * 0.5f - bw - 4;
+        if (ui.ButtonAt(m_Playing ? "Playing" : "Play", x, y + 6, bw, 26, m_Playing) && !m_Playing) StartPlay();
+        if (ui.ButtonAt("Stop", x + bw + 8, y + 6, bw, 26) && m_Playing) StopPlay();
         const std::string title = m_Project.Name.empty() ? "No project" : m_Project.Name + "  -  " + GetScene()->GetName();
-        r.Text(12, y + (36 - r.LineHeight()) * 0.5f, title, ui.Style.TextDim);
-        if (m_Playing) r.Rect(0, y + 34, width, 2, {0.2f, 0.8f, 0.3f, 1.0f});
+        r.Text(12, y + (ToolbarHeight - r.LineHeight()) * 0.5f, title, ui.Style.TextDim);
+        if (m_Playing) r.Rect(0, y + ToolbarHeight - 2, width, 2, {0.2f, 0.8f, 0.3f, 1.0f});
     }
 
     void DrawHierarchy(UIContext& ui, float x, float y, float w, float h) {
@@ -319,6 +337,13 @@ private:
             GetWindow().SetVSync(m_Settings.VSync);
         }
         if (ui.Button(std::string("Stats overlay: ") + (m_Settings.ShowStats ? "On" : "Off"), 180)) m_Settings.ShowStats = !m_Settings.ShowStats;
+        ui.Label(Format("UI size: {}%  (display scale {}%)", (int)(m_Settings.UIScale * 100 + 0.5f),
+                        (int)(GetWindow().GetContentScale() * 100 + 0.5f)), &ui.Style.Text);
+        if (ui.Button("Smaller", 90)) m_Settings.UIScale = std::max(0.5f, m_Settings.UIScale - 0.1f);
+        ui.SameLine();
+        if (ui.Button("Larger", 90)) m_Settings.UIScale = std::min(3.0f, m_Settings.UIScale + 0.1f);
+        ui.SameLine();
+        if (ui.Button("Reset", 90)) m_Settings.UIScale = 1.0f;
         ui.Label("Editor camera speed: " + std::to_string((int)m_Settings.CameraSpeed) + "  (mouse wheel while flying)", &ui.Style.TextDim);
         if (ui.Button("Slower", 90)) m_Settings.CameraSpeed = std::max(1.0f, m_Settings.CameraSpeed * 0.75f);
         ui.SameLine();
@@ -342,7 +367,7 @@ private:
     std::string StatusText() const {
         if (m_Playing) return "PLAYING - F5 or Stop to return to the editor (Esc releases the mouse first)";
         if (!m_Status.empty()) return m_Status;
-        return "Hold right mouse to fly (WASD, Q/E, Shift)   |   Left click: select   |   F5: Play   |   Ctrl+S: Save";
+        return "WASD / Q E: move camera   |   Hold right mouse: look   |   Left click: select   |   F5: Play   |   Ctrl+S: Save";
     }
 
     void ShowControls() {
@@ -370,12 +395,16 @@ private:
                 m_Pitch = Clamp(m_Pitch - d.y * 0.12f, -89.0f, 89.0f);
                 const float scroll = Input::GetScrollDelta();
                 if (scroll != 0) m_Settings.CameraSpeed = Clamp(m_Settings.CameraSpeed * (1.0f + scroll * 0.15f), 1.0f, 100.0f);
+            }
+            // Keyboard movement works any time (not only while looking with
+            // the right mouse button); Ctrl is reserved for shortcuts.
+            if (!Input::IsKeyDown(Key::Control) && !GetUI().IsMessageOpen()) {
                 const Quat rot = Quat::FromEuler({Radians(m_Pitch), Radians(m_Yaw), 0});
                 Vec3 move(0.0f);
-                if (Input::IsKeyDown(Key::W)) move += rot * Vec3::Forward();
-                if (Input::IsKeyDown(Key::S)) move -= rot * Vec3::Forward();
-                if (Input::IsKeyDown(Key::D)) move += rot * Vec3::Right();
-                if (Input::IsKeyDown(Key::A)) move -= rot * Vec3::Right();
+                if (Input::IsKeyDown(Key::W) || Input::IsKeyDown(Key::Up))    move += rot * Vec3::Forward();
+                if (Input::IsKeyDown(Key::S) || Input::IsKeyDown(Key::Down))  move -= rot * Vec3::Forward();
+                if (Input::IsKeyDown(Key::D) || Input::IsKeyDown(Key::Right)) move += rot * Vec3::Right();
+                if (Input::IsKeyDown(Key::A) || Input::IsKeyDown(Key::Left))  move -= rot * Vec3::Right();
                 if (Input::IsKeyDown(Key::E)) move += Vec3::Up();
                 if (Input::IsKeyDown(Key::Q)) move -= Vec3::Up();
                 if (LengthSq(move) > 0) m_CamPos += Normalize(move) * m_Settings.CameraSpeed * (Input::IsKeyDown(Key::Shift) ? 3.0f : 1.0f) * dt;
@@ -562,19 +591,45 @@ private:
     }
 
     void ExportGame() {
-        if (m_Project.Directory.empty()) return;
+        if (m_Project.Directory.empty() || m_Export.Running) return;
         SaveScene();
-        const fs::path out = m_ExportRoot / Packager::SafeName(m_Project.Name);
-        const auto result = Packager::Package(m_Project, Packager::DefaultRuntimePath(), out.string());
-        if (result.Ok) {
-            GetUI().OpenMessage("Export Game", "Exported '" + m_Project.Name + "' (" + std::to_string(result.FilesCopied) +
-                " content files).\n\n" + result.ExePath + "\n\nDouble-click the .exe to play. The folder opens now.");
-            LapisApp::OpenInShell(result.OutputDir);
-        } else {
-            std::string text = "Export failed:\n";
-            for (size_t i = 0; i < result.Errors.size() && i < 8; ++i) text += "  - " + result.Errors[i] + "\n";
-            GetUI().OpenMessage("Export Game", text);
+        m_Export.Running = true;
+        m_Export.Done = false;
+        m_Export.Progress = 0.0f;
+        m_Export.Thread = std::thread([this, project = m_Project]() {
+            const fs::path out = m_ExportRoot / Packager::SafeName(project.Name);
+            auto result = Packager::Package(project, Packager::DefaultRuntimePath(), out.string(),
+                [this](float fraction, const std::string& step) {
+                    m_Export.Progress = fraction;
+                    std::lock_guard<std::mutex> lock(m_Export.Mutex);
+                    m_Export.Step = step;
+                });
+            std::lock_guard<std::mutex> lock(m_Export.Mutex);
+            m_Export.Result = std::move(result);
+            m_Export.Done = true;
+        });
+    }
+
+    void UpdateExport(UIContext& ui) {
+        if (!m_Export.Running) return;
+        if (m_Export.Done) {
+            m_Export.Thread.join();
+            m_Export.Running = false;
+            const auto& result = m_Export.Result;
+            if (result.Ok) {
+                ui.OpenMessage("Export Game", "Exported '" + m_Project.Name + "' (" + std::to_string(result.FilesCopied) +
+                    " content files).\n\n" + result.ExePath + "\n\nDouble-click the .exe to play. The folder opens now.");
+                LapisApp::OpenInShell(result.OutputDir);
+            } else {
+                std::string text = "Export failed:\n";
+                for (size_t i = 0; i < result.Errors.size() && i < 8; ++i) text += "  - " + result.Errors[i] + "\n";
+                ui.OpenMessage("Export Game", text);
+            }
+            return;
         }
+        std::string step;
+        { std::lock_guard<std::mutex> lock(m_Export.Mutex); step = m_Export.Step; }
+        ui.ProgressDialog("Exporting '" + m_Project.Name + "'", step, m_Export.Progress);
     }
 
     // =========================================================================
@@ -647,6 +702,17 @@ private:
         GetScene()->FlushPendingDestroys(); // edit mode has no update loop to do it
         m_Selected = {};
     }
+
+    static constexpr float ToolbarHeight = 38.0f;
+
+    struct ExportJob {
+        std::thread Thread;
+        std::atomic<bool> Running{false}, Done{false};
+        std::atomic<float> Progress{0.0f};
+        std::mutex Mutex;
+        std::string Step;
+        Packager::Result Result;
+    } m_Export;
 
     EditorSettings m_Settings;
     std::string m_StartProject;

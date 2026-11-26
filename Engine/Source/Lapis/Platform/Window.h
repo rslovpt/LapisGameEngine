@@ -42,6 +42,10 @@ public:
     // backends render into an offscreen FBO instead.
     virtual u32  GetBackbufferFBO() const { return 0; }
 
+    // Monitor DPI scale (1.0 = 96 DPI / 100%, 1.5 = 150% in Windows display
+    // settings). Used to size UI so it stays readable and sharp.
+    virtual float GetContentScale() const;
+
     virtual void* GetNativeHandle() const = 0;
     virtual bool  IsHeadless() const { return false; }
 
