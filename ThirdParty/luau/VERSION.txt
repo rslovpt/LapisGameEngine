@@ -1,0 +1,2 @@
+Luau 0.748 (https://github.com/luau-lang/luau, tag 0.748)
+Vendored subset: Common, Ast, Bytecode, Compiler, VM. Unmodified.

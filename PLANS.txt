@@ -149,7 +149,7 @@ PHASE 8 - Runtime / Application
 ------------------------------------------------------------------------------
 PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 ------------------------------------------------------------------------------
-[ ] Vendor Luau VM + compiler (ThirdParty/luau, pinned release, MIT)
+[x] Vendor Luau VM + compiler (ThirdParty/luau, pinned release, MIT)
 [ ] ScriptEngine: compile + run .luau files, error reporting with line numbers
 [ ] LuauScript component: per-entity script with OnStart/OnUpdate/OnDestroy
 [ ] Bindings: Vector3, Entity, Transform, Scene, Input, Physics, Debug, Time

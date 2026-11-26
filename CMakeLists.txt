@@ -32,6 +32,7 @@ function(lapis_set_warnings target)
     endif()
 endfunction()
 
+add_subdirectory(ThirdParty/luau)
 add_subdirectory(Engine)
 
 if(LAPIS_BUILD_SANDBOX)
