@@ -44,6 +44,7 @@ std::optional<Project> Project::Parse(const std::string& text, const std::string
             if (hash != std::string::npos) v = Trim(v.substr(0, hash));
             if (!p.Graphics.Set(key.substr(9), v)) LAPIS_WARN("project.lapis line {}: bad graphics setting '{}'", lineNo, key);
         }
+        else if (key == "GraphicsAPI") p.GraphicsAPI = value;
         else if (key == "Multithreading") p.Multithreading = ToBool(value);
         else if (key == "WorkerThreads") p.WorkerThreads = ToU32(value, 0);
         // Older project files (before the full graphics settings).
@@ -79,6 +80,7 @@ std::string Project::Serialize() const {
       << "StartupScene=" << StartupScene << "\n";
     if (!MainScript.empty()) o << "MainScript=" << MainScript << "\n";
     o << "Width=" << Width << "\nHeight=" << Height << "\n";
+    o << "# Graphics API: Auto (DirectX 12 on Windows), DirectX 12 or OpenGL\nGraphicsAPI=" << GraphicsAPI << "\n";
     o << "# Game graphics settings (defaults of the exported game)\n";
     Graphics.Serialize(o, "Graphics.");
     o << "# Multithreading (WorkerThreads=0 means automatic)\n"

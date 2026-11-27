@@ -122,6 +122,8 @@ bool HasRedPixels(const std::vector<u8>& px) {
 
 int main(int argc, char** argv) {
     LapisApp::Args args(argc, argv);
+    // DirectX 12 validation messages are copied into this report.
+    if (!args.Has("--no-gpu-validation")) LapisApp::SetEnv("LAPIS_D3D12_DEBUG", "1");
     if (args.Has("--no-window")) LapisApp::SetEnv("LAPIS_HEADLESS", "1");
     const fs::path logs = fs::path(LapisApp::ExeDir()) / "Logs";
     fs::create_directories(logs);
@@ -243,9 +245,13 @@ int main(int argc, char** argv) {
                 Scene scene("DiagnosticsScene");
                 buildTestScene(scene);
                 scene.OnStart();
-                for (int i = 0; i < 5; ++i) { scene.OnUpdate(1.0f / 60.0f); renderFrame(*window, *device, renderer, scene); }
+                for (int i = 0; i < 5; ++i) {
+                    if (i == 4) device->CaptureNextFrame();
+                    scene.OnUpdate(1.0f / 60.0f);
+                    renderFrame(*window, *device, renderer, scene);
+                }
                 u32 w = 0, h = 0;
-                auto pixels = renderer.ReadPixels(w, h);
+                auto pixels = device->GetCapturedFrame(w, h);
                 R.Check(name + ": frame stats sane", renderer.GetStats().DrawCalls >= 4 && renderer.GetStats().Triangles > 0,
                         Format("{} draw calls, {} triangles", renderer.GetStats().DrawCalls, renderer.GetStats().Triangles));
                 const RegionStats sky = Analyze(pixels, w, h, 0.1f, 0.85f, 0.9f, 0.98f);
@@ -364,6 +370,7 @@ int main(int argc, char** argv) {
             scene->OnStart();
             if (!project->MainScript.empty()) R.Check("Main script runs", scene->GetScripts().RunFile(project->MainScript), project->MainScript);
             for (int i = 0; i < 180; ++i) {
+                if (i == 179) device->CaptureNextFrame();
                 scene->OnFixedUpdate(1.0f / 60.0f);
                 scene->OnUpdate(1.0f / 60.0f);
                 renderFrame(*window, *device, renderer, *scene);
@@ -374,7 +381,7 @@ int main(int argc, char** argv) {
             R.Check("No engine errors while running the project", capturedErrors.size() == errorsBefore,
                     Format("{} error(s)", capturedErrors.size() - errorsBefore));
             u32 w = 0, h = 0;
-            auto px = renderer.ReadPixels(w, h);
+            auto px = device->GetCapturedFrame(w, h);
             ImageLoader::WriteBMP((logs / "diagnostics_project.bmp").string(), w, h, px);
             R.Line("Project screenshot: " + (logs / "diagnostics_project.bmp").string());
             scene->OnStop();

@@ -144,6 +144,7 @@ public:
     ~Win32Window() override { Shutdown(); }
 
     bool Init();
+    bool CreateGLContext();
 
     void PollEvents() override {
         MSG msg;
@@ -154,7 +155,7 @@ public:
         if (m_CursorLocked && m_Focused) ClipToClientRect();
     }
 
-    void SwapBuffers() override { ::SwapBuffers(m_DC); }
+    void SwapBuffers() override { if (m_GLContext) ::SwapBuffers(m_DC); }
 
     u32 GetWidth() const override  { return m_Props.Width; }
     u32 GetHeight() const override { return m_Props.Height; }
@@ -166,7 +167,7 @@ public:
 
     void SetVSync(bool enabled) override {
         m_Props.VSync = enabled;
-        if (wglSwapIntervalEXT) wglSwapIntervalEXT(enabled ? 1 : 0);
+        if (m_GLContext && wglSwapIntervalEXT) wglSwapIntervalEXT(enabled ? 1 : 0);
     }
     bool IsVSync() const override { return m_Props.VSync; }
 
@@ -267,7 +268,7 @@ bool Win32Window::Init() {
     m_Instance = GetModuleHandleW(nullptr);
     SetProcessDPIAware();
 
-    if (!LoadWGLExtensions(m_Instance)) {
+    if (m_Props.OpenGLContext && !LoadWGLExtensions(m_Instance)) {
         LAPIS_FATAL("Win32: failed to load WGL extensions (is an OpenGL driver installed?)");
         return false;
     }
@@ -305,7 +306,24 @@ bool Win32Window::Init() {
                              nullptr, nullptr, m_Instance, this);
     if (!m_Hwnd) { LAPIS_FATAL("Win32: CreateWindowEx failed ({})", GetLastError()); return false; }
     m_DC = GetDC(m_Hwnd);
+    if (m_Props.OpenGLContext && !CreateGLContext()) return false;
 
+    // Raw mouse input for precise, unaccelerated mouse-look deltas.
+    RAWINPUTDEVICE rid{};
+    rid.usUsagePage = 0x01; // generic desktop
+    rid.usUsage     = 0x02; // mouse
+    rid.hwndTarget  = m_Hwnd;
+    RegisterRawInputDevices(&rid, 1, sizeof(rid));
+
+    ShowWindow(m_Hwnd, SW_SHOW);
+    SetForegroundWindow(m_Hwnd);
+    SetFocus(m_Hwnd);
+    return true;
+}
+
+// OpenGL only: pixel format + newest core context + function loading.
+// (DirectX 12 / Vulkan windows skip this; their device owns the swap chain.)
+bool Win32Window::CreateGLContext() {
     // Pick a pixel format: try with MSAA first, then without.
     int pixelFormat = 0;
     UINT numFormats = 0;
@@ -350,17 +368,6 @@ bool Win32Window::Init() {
     EnableOpenGLDebugOutput();
 #endif
     SetVSync(m_Props.VSync);
-
-    // Raw mouse input for precise, unaccelerated mouse-look deltas.
-    RAWINPUTDEVICE rid{};
-    rid.usUsagePage = 0x01; // generic desktop
-    rid.usUsage     = 0x02; // mouse
-    rid.hwndTarget  = m_Hwnd;
-    RegisterRawInputDevices(&rid, 1, sizeof(rid));
-
-    ShowWindow(m_Hwnd, SW_SHOW);
-    SetForegroundWindow(m_Hwnd);
-    SetFocus(m_Hwnd);
     return true;
 }
 

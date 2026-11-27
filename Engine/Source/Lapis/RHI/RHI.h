@@ -41,6 +41,10 @@ namespace Lapis::RHI {
 enum class API : u8 { OpenGL, D3D12, D3D11, Vulkan };
 const char* APIName(API api);
 bool APIFromName(const std::string& name, API& out);
+// The best API for this platform (DirectX 12 on Windows, OpenGL elsewhere).
+API DefaultAPI();
+// "Auto" / "" = DefaultAPI(); otherwise a name accepted by APIFromName.
+API ResolveAPIChoice(const std::string& choice);
 
 enum class Format : u8 {
     None,
@@ -193,8 +197,11 @@ public:
 
     // Resolves (or copies) color and depth of src into dst (same size; dst single-sampled).
     virtual void Resolve(RenderTargetHandle src, RenderTargetHandle dst) = 0;
-    // RGBA8 pixels of the last rendered window frame, bottom row first.
-    virtual std::vector<u8> ReadBackbuffer(u32& width, u32& height) = 0;
+    // Screenshots: the next EndFrame copies the finished frame (just before
+    // present, while it is still valid) and GetCapturedFrame returns it as
+    // RGBA8, bottom row first. Empty if nothing was captured.
+    virtual void CaptureNextFrame() = 0;
+    virtual std::vector<u8> GetCapturedFrame(u32& width, u32& height) = 0;
 
     // Counters for the stats overlay.
     u32 FrameDrawCalls = 0;

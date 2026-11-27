@@ -43,14 +43,23 @@ bool Application::Init() {
 
     JobSystem::Init(m_Spec.WorkerThreads);
 
-    if (!CreateWindowAndDevice()) return false;
-    RHI::SetCurrent(m_Device.get());
-
-    if (!m_Renderer.Init(*m_Device, m_Window->GetWidth(), m_Window->GetHeight(), m_Spec.MSAASamples)) {
-        LAPIS_FATAL("Failed to initialize the renderer");
-        return false;
+    for (;;) {
+        if (!CreateWindowAndDevice()) return false;
+        RHI::SetCurrent(m_Device.get());
+        const bool ok = m_Renderer.Init(*m_Device, m_Window->GetWidth(), m_Window->GetHeight(), m_Spec.MSAASamples) &&
+                        m_UIRenderer.Init(*m_Device);
+        if (ok) break;
+        const RHI::API api = m_Device->GetInfo().Api;
+        m_UIRenderer.Shutdown();
+        m_Renderer.Shutdown();
+        RHI::SetCurrent(nullptr);
+        m_Device.reset();
+        m_Window.reset();
+        if (api == RHI::API::OpenGL || !m_Spec.AllowAPIFallback) { LAPIS_FATAL("Failed to initialize the renderer"); return false; }
+        m_APIFallbackReason = std::string(RHI::APIName(api)) + ": the renderer could not start (shader/pipeline error, see log)";
+        LAPIS_WARN("{} - retrying with OpenGL", m_APIFallbackReason);
+        m_Spec.GraphicsAPI = RHI::API::OpenGL;
     }
-    if (!m_UIRenderer.Init(*m_Device)) { LAPIS_FATAL("Failed to initialize the UI renderer"); return false; }
     m_UI = CreateScope<UIContext>(m_UIRenderer);
     return true;
 }
@@ -138,6 +147,9 @@ int Application::Run() {
         float dt = m_Window->IsHeadless() || m_Spec.FixedFrameTime ? m_Spec.FixedTimestep : (float)frameTimer.Elapsed();
         frameTimer.Reset();
         dt = std::min(dt, 0.25f);
+
+        // --screenshot (tests only): keep the latest frame, whenever the app ends.
+        if (!m_Spec.ScreenshotOnExit.empty()) m_Device->CaptureNextFrame();
 
         Frame(dt);
 
@@ -275,7 +287,7 @@ void Application::ApplyProjectSettings(const Project& project) {
 bool Application::SaveScreenshot(const std::string& path) {
     if (!m_Window) return false;
     u32 w = 0, h = 0;
-    auto pixels = m_Renderer.ReadPixels(w, h);
+    auto pixels = m_Device->GetCapturedFrame(w, h);
     const bool ok = !pixels.empty() && ImageLoader::WriteBMP(path, w, h, pixels);
     if (ok) LAPIS_INFO("Screenshot saved: {}", path);
     else LAPIS_ERROR("Screenshot failed: {}", path);

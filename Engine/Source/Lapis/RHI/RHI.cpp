@@ -28,6 +28,20 @@ bool APIFromName(const std::string& name, API& out) {
     return false;
 }
 
+API DefaultAPI() {
+#if defined(_WIN32)
+    return API::D3D12;
+#else
+    return API::OpenGL;
+#endif
+}
+
+API ResolveAPIChoice(const std::string& choice) {
+    API api = DefaultAPI();
+    if (!choice.empty() && choice != "Auto" && choice != "auto") APIFromName(choice, api);
+    return api;
+}
+
 bool IsDepthFormat(Format f) { return f == Format::D24 || f == Format::D32F; }
 
 u32 BytesPerPixel(Format f) {

@@ -304,12 +304,17 @@ PHASE 12 - Multiple graphics APIs (after the first Windows test session)
 ------------------------------------------------------------------------------
 [x] RHI abstraction: renderer talks to an interface, not OpenGL directly
     (RHI/RHI.h; OpenGL 4.5 backend verified pixel-identical to the old renderer)
-[ ] Backends: OpenGL 4.5 (current), DirectX 12, Vulkan
-[ ] DirectX 12 = DEFAULT on Windows (owner's decision). Vulkan after DX12
-    (Linux / macOS via MoltenVK / Android)
+[x] Backends: OpenGL 4.5, DirectX 12 (RHI/D3D12, compile-checked; first run
+    on real hardware at the next test session)
+[ ] Vulkan after DX12 (Linux / macOS via MoltenVK / Android)
+[x] DirectX 12 = DEFAULT on Windows (owner's decision); project setting
+    GraphicsAPI (Auto / DirectX 12 / OpenGL), editor File > Settings, --api flag
 [ ] DirectX 11 backend as the lighter fallback
-[ ] If DX12 can't start or the PC is too weak: prompt to switch to OpenGL or
-    DirectX 11 (remembered; changeable later in File > Settings)
+[x] If DX12 can't start: automatic fallback to OpenGL + message explaining why
+[x] If DX12 runs very slowly (< 20 FPS in the editor): one-time prompt
+    suggesting OpenGL / lower viewport quality
+[x] Diagnostics tests every API (pixel checks) with D3D12 validation messages
+    copied into the report
 [ ] First-launch prompt: choose GPU/graphics API mode (remembered in settings,
     changeable later in File > Settings)
 [x] Shader library: every built-in shader in GLSL + HLSL with shared cbuffer layouts

@@ -257,8 +257,12 @@ std::string GraphicsSettings::Get(const std::string& key) const {
 std::string GraphicsSettings::OptionUnavailable(const Field& f, int option, const GPUInfo& gpu, GraphicsAPI api, bool* hidden) {
     if (hidden) *hidden = false;
     const std::string key = f.Key;
-    const bool modernAPI = api == GraphicsAPI::DirectX12 || api == GraphicsAPI::Vulkan;
-    const char* needsAPI = "Needs the DirectX 12 / Vulkan renderer (coming in Phase 12)";
+    // Vendor SDKs (FSR 3, XeSS, DLSS) need DX12/Vulkan *and* their SDK
+    // integration, which is not done yet (PLANS.txt Phase 12).
+    constexpr bool VendorSDKsIntegrated = false;
+    const bool modernAPI = (api == GraphicsAPI::DirectX12 || api == GraphicsAPI::Vulkan) && VendorSDKsIntegrated;
+    const char* needsAPI = api == GraphicsAPI::OpenGL ? "Needs the DirectX 12 / Vulkan renderer + vendor SDK (coming soon)"
+                                                      : "Vendor SDK integration coming soon";
 
     if (key == "Upscaler") {
         if (option == UpscaleDLSS) {

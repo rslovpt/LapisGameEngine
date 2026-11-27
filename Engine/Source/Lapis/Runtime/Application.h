@@ -25,7 +25,7 @@ struct ApplicationSpec {
     WindowProps Window;
     std::string LogFile;               // empty = no log file
     u32   MSAASamples = 4;
-    RHI::API GraphicsAPI = RHI::API::OpenGL;  // requested graphics backend
+    RHI::API GraphicsAPI = RHI::DefaultAPI(); // requested graphics backend
     bool  AllowAPIFallback = true;            // fall back to OpenGL if it can't start
     u32   WorkerThreads = 0;           // job system workers (0 = automatic)
     float FixedTimestep = 1.0f / 60.0f;

@@ -619,9 +619,4 @@ void Renderer::DrawAxes(const Mat4& t, float size) {
     DrawLine(o, t.TransformPoint({0, 0, size}), {0, 0, 1, 1});
 }
 
-std::vector<u8> Renderer::ReadPixels(u32& width, u32& height) const {
-    if (!m_Device) { width = height = 0; return {}; }
-    return m_Device->ReadBackbuffer(width, height);
-}
-
 } // namespace Lapis

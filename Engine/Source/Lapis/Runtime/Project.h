@@ -32,6 +32,11 @@ struct Project {
     // Luau Graphics library (saved to Saved/graphics.cfg).
     GraphicsSettings Graphics = GraphicsSettings::FromPreset(GraphicsSettings::Preset::High);
 
+    // Graphics API of the exported game: "Auto" (DirectX 12 on Windows,
+    // OpenGL elsewhere), "DirectX 12" or "OpenGL". Falls back to OpenGL
+    // automatically if the chosen API can't start on a player's PC.
+    std::string GraphicsAPI = "Auto";
+
     // Multithreading (job system). 0 workers = automatic (CPU threads - 1).
     bool  Multithreading = true;
     u32   WorkerThreads = 0;

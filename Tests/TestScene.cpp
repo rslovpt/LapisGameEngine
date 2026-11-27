@@ -229,8 +229,9 @@ LAPIS_TEST(Graphics, HardwareFallbacks) {
     // DLSS is hidden without an RTX GPU, and needs DX12/Vulkan even with one.
     CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, amd, GraphicsAPI::OpenGL, &hidden).empty() && hidden);
     CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, rtx, GraphicsAPI::OpenGL, &hidden).empty() && !hidden);
-    CHECK(GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, rtx, GraphicsAPI::Vulkan).empty());
-    CHECK(GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleFSR3, amd, GraphicsAPI::DirectX12).empty());
+    // Vendor SDKs aren't integrated yet: still unavailable on DX12 / Vulkan.
+    CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, rtx, GraphicsAPI::Vulkan).empty());
+    CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleFSR3, amd, GraphicsAPI::DirectX12).empty());
 
     GraphicsSettings g;
     g.Upscaler = GraphicsSettings::UpscaleXeSS;

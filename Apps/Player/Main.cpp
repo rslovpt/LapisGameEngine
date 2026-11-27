@@ -96,6 +96,7 @@ Application* Lapis::CreateApplication(int argc, char** argv) {
     spec.LogFile = (std::filesystem::path(LapisApp::ExeDir()) / "Logs" / (project->Name + ".log")).string();
     spec.MaxFrames = std::stoull(args.Value("--frames", "0"));
     spec.FixedFrameTime = args.Has("--fixed-dt");
+    spec.GraphicsAPI = RHI::ResolveAPIChoice(args.Value("--api", project->GraphicsAPI));
     spec.ScreenshotOnExit = args.Value("--screenshot");
     return new PlayerApp(spec, *project, args.Has("--fail-on-script-error"));
 }

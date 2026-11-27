@@ -304,6 +304,15 @@ public:
     }
     void EndFrame() override {
         glBindVertexArray(0);
+        if (m_CaptureRequested) {
+            m_CaptureRequested = false;
+            m_CaptureWidth = m_BackWidth;
+            m_CaptureHeight = m_BackHeight;
+            m_Capture.resize(size_t(m_BackWidth) * m_BackHeight * 4);
+            glBindFramebuffer(GL_FRAMEBUFFER, m_Window.GetBackbufferFBO());
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, (GLsizei)m_BackWidth, (GLsizei)m_BackHeight, GL_RGBA, GL_UNSIGNED_BYTE, m_Capture.data());
+        }
         m_Window.SwapBuffers();
     }
     void SetVSync(bool enabled) override { m_Window.SetVSync(enabled); }
@@ -413,15 +422,11 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    std::vector<u8> ReadBackbuffer(u32& width, u32& height) override {
-        width = m_BackWidth;
-        height = m_BackHeight;
-        std::vector<u8> pixels(size_t(width) * height * 4);
-        glBindFramebuffer(GL_FRAMEBUFFER, m_Window.GetBackbufferFBO());
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return pixels;
+    void CaptureNextFrame() override { m_CaptureRequested = true; }
+    std::vector<u8> GetCapturedFrame(u32& width, u32& height) override {
+        width = m_CaptureWidth;
+        height = m_CaptureHeight;
+        return m_Capture;
     }
 
 private:
@@ -475,6 +480,9 @@ private:
     GLPipeline* m_Bound = nullptr;
     u64 m_IndexOffset = 0;
     u32 m_BackWidth = 1, m_BackHeight = 1;
+    bool m_CaptureRequested = false;
+    std::vector<u8> m_Capture;
+    u32 m_CaptureWidth = 0, m_CaptureHeight = 0;
 };
 
 } // namespace

@@ -94,8 +94,6 @@ public:
     const RenderStats& GetStats() const { return m_Stats; }
     const Ref<Texture2D>& GetWhiteTexture() const { return m_White; }
 
-    // RGBA8 pixels of the last frame, bottom row first.
-    std::vector<u8> ReadPixels(u32& width, u32& height) const;
 
 private:
     struct DrawItem {

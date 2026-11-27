@@ -40,6 +40,8 @@ struct EditorSettings {
     // lighter "Medium" so the editor stays responsive.
     GraphicsSettings Viewport = DefaultViewport();
     bool PreviewGameGraphics = false;  // render the viewport with the project's game settings
+    std::string GraphicsAPI = "Auto";  // Auto (DirectX 12 on Windows) / DirectX 12 / OpenGL - needs a restart
+    bool PerfPromptShown = false;      // the "DirectX 12 seems slow here" suggestion was shown
     bool ShowStats = true;
     bool ShowHierarchy = true;
     bool ShowInspector = true;
@@ -64,6 +66,8 @@ struct EditorSettings {
                 Viewport.Set(k.substr(9), value);
             }
             else if (k == "PreviewGameGraphics") PreviewGameGraphics = v == "1";
+            else if (k == "GraphicsAPI") GraphicsAPI = v;
+            else if (k == "PerfPromptShown") PerfPromptShown = v == "1";
             else if (k == "VSync") Viewport.VSync = v == "1";   // older ini files
             else if (k == "ShowStats") ShowStats = v == "1";
             else if (k == "ShowHierarchy") ShowHierarchy = v == "1";
@@ -74,7 +78,8 @@ struct EditorSettings {
     }
     void Save() const {
         std::ofstream out(File());
-        out << "LastProject=" << LastProject << "\nPreviewGameGraphics=" << PreviewGameGraphics << "\nShowStats=" << ShowStats
+        out << "LastProject=" << LastProject << "\nGraphicsAPI=" << GraphicsAPI << "\nPerfPromptShown=" << PerfPromptShown
+            << "\nPreviewGameGraphics=" << PreviewGameGraphics << "\nShowStats=" << ShowStats
             << "\nShowHierarchy=" << ShowHierarchy << "\nShowInspector=" << ShowInspector << "\nCameraSpeed=" << CameraSpeed << "\nUIScale=" << UIScale << "\n";
         out << "# Editor viewport quality (editor only - not exported)\n";
         Viewport.Serialize(out, "Viewport.");
@@ -121,6 +126,11 @@ protected:
         if (!OpenProject(m_StartProject)) NewUntitledScene();
         ApplyEditorGraphics();
 
+        // The requested graphics API couldn't start: tell the user once per launch.
+        if (!GetAPIFallbackReason().empty())
+            GetUI().OpenMessage("Graphics", GetAPIFallbackReason() + "\n\nLapis is using " + RHI::APIName(GetDevice().GetInfo().Api) +
+                                                ".\nYou can choose the graphics API in File > Settings.");
+
         // Built-in code editor: compile-check Luau on save (errors mark the line).
         m_Code.Validate = [](const std::string& path, const std::string& source) -> std::string {
             if (FileSystem::ExtensionOf(path) != ".luau") return {};
@@ -163,6 +173,7 @@ protected:
     // per frame
     // =========================================================================
     void OnUpdate(float dt) override {
+        CheckPerformance(dt);
         const bool typing = m_ShowCode && m_Code.HasFocus();
         if (!typing) UpdateEditorCamera(dt);
         else UpdateEditorCamera(0.0f);
@@ -545,10 +556,45 @@ private:
         ui.EndPanel();
     }
 
+    // After the editor has been open a few seconds: if DirectX 12 runs very
+    // slowly on this PC, suggest OpenGL (once).
+    void CheckPerformance(float dt) {
+        if (m_Settings.PerfPromptShown || m_Playing || GetDevice().GetInfo().Api == RHI::API::OpenGL) return;
+        m_PerfTime += dt;
+        ++m_PerfFrames;
+        if (m_PerfTime < 6.0f) return;
+        const float fps = m_PerfFrames / m_PerfTime;
+        m_PerfTime = 0.0f;
+        m_PerfFrames = 0;
+        if (fps >= 20.0f) return;
+        m_Settings.PerfPromptShown = true;
+        m_Settings.Save();
+        GetUI().OpenMessage("Performance",
+                            Format("The editor is running at about {} FPS with {} on this PC.\n\n"
+                                   "If that feels too slow, switch to OpenGL in File > Settings > Graphics API\n"
+                                   "(DirectX 11 is coming), or lower File > Editor Viewport Quality.",
+                                   (int)fps, RHI::APIName(GetDevice().GetInfo().Api)));
+    }
+
     void DrawSettings(UIContext& ui, float x, float y, float w, float h) {
         ui.BeginPanel("Settings (general)", x, y, w, h);
-        ui.Label("Graphics API:  OpenGL 4.5 core", &ui.Style.Text);
-        ui.Label("DirectX 12 / Vulkan: planned (see PLANS.txt, Phase 12)", &ui.Style.TextDim);
+        const RHI::DeviceInfo& info = GetDevice().GetInfo();
+        ui.Label(Format("Running: {}  on  {}", RHI::APIName(info.Api), info.GPUName), &ui.Style.Text);
+        {
+            // Choices: Auto / DirectX 12 / DirectX 11 (coming) / OpenGL. Applied on restart.
+            const std::vector<std::string> names = {std::string("Auto (") + RHI::APIName(RHI::DefaultAPI()) + ")", "DirectX 12", "DirectX 11", "OpenGL"};
+            const std::vector<std::string> values = {"Auto", "DirectX 12", "DirectX 11", "OpenGL"};
+            std::vector<std::string> reasons(4);
+            if (!RHI::Device::IsCompiledIn(RHI::API::D3D12)) reasons[1] = "Windows only";
+            reasons[2] = "DirectX 11 backend coming soon";
+            int current = 0;
+            for (int i = 0; i < 4; ++i) if (values[i] == m_Settings.GraphicsAPI) current = i;
+            if (ui.Option("Graphics API", current, names, reasons)) {
+                m_Settings.GraphicsAPI = values[current];
+                m_Settings.Save();
+            }
+            if (RHI::ResolveAPIChoice(m_Settings.GraphicsAPI) != info.Api) ui.Label("Restart the editor to switch the graphics API.", &ui.Style.Accent);
+        }
         ui.Spacing(6);
         if (ui.Button("Editor viewport quality...", 220)) { m_ShowViewportQuality = true; m_ShowSettings = false; }
         if (ui.Button(std::string("Stats overlay: ") + (m_Settings.ShowStats ? "On" : "Off"), 180)) m_Settings.ShowStats = !m_Settings.ShowStats;
@@ -1110,6 +1156,8 @@ private:
     bool m_ShowSettings = false;
     bool m_ShowGraphics = false;
     bool m_ShowViewportQuality = false;
+    float m_PerfTime = 0.0f;
+    u32   m_PerfFrames = 0;
     GraphicsPanelState m_GamePanel, m_ViewportPanel;
     bool m_ShowCode = false;
     CodeEditor m_Code;
@@ -1143,6 +1191,7 @@ Application* Lapis::CreateApplication(int argc, char** argv) {
     spec.Window.Width = (u32)std::stoul(args.Value("--width", "1600"));
     spec.Window.Height = (u32)std::stoul(args.Value("--height", "900"));
     spec.Window.VSync = settings.Viewport.VSync;
+    spec.GraphicsAPI = RHI::ResolveAPIChoice(args.Value("--api", settings.GraphicsAPI));
     spec.MSAASamples = settings.Viewport.MSAASamples();
     spec.LogFile = (fs::path(LapisApp::ExeDir()) / "Logs" / "LapisEditor.log").string();
     spec.MaxFrames = std::stoull(args.Value("--frames", "0"));
