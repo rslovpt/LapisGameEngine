@@ -1,5 +1,7 @@
 # Lapis Game Engine
 
+### This project on purpose heavily uses AI to develop this project.
+
 Lapis is a from-scratch 3D game engine in C++17, structured like Unreal: an
 engine library, an **editor**, a game **player/runtime**, a **packager** that
 exports standalone games, and embedded **Luau** scripting for gameplay.
