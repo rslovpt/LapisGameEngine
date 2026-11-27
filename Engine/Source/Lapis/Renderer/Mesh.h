@@ -5,7 +5,7 @@
 
 #include "Lapis/Core/Base.h"
 #include "Lapis/Math/Geometry.h"
-#include "Lapis/Renderer/Buffer.h"
+#include "Lapis/RHI/RHI.h"
 
 namespace Lapis {
 
@@ -29,18 +29,17 @@ struct MeshData {
 class Mesh : NonCopyable {
 public:
     explicit Mesh(const MeshData& data, const std::string& name = "Mesh");
+    ~Mesh();
 
-    void Draw() const;
-    // Draws `count` instances whose data {mat4 model, vec4 tint} starts at
-    // byte `offset` in `instanceBuffer` (vertex attributes 3..7).
-    void DrawInstanced(u32 instanceBuffer, size_t offset, u32 count) const;
+    // Binds the vertex (slot 0) and index buffers on the device.
+    void Bind(RHI::Device& device) const;
 
     const AABB& GetBounds() const { return m_Bounds; }
     u32 GetIndexCount() const { return m_IndexCount; }
     const std::string& GetName() const { return m_Name; }
 
 private:
-    Scope<VertexArray> m_VAO;
+    RHI::BufferHandle m_VertexBuffer, m_IndexBuffer;
     u32  m_IndexCount = 0;
     AABB m_Bounds;
     std::string m_Name;

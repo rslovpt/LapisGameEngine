@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Lapis/Core/Base.h"
+#include "Lapis/RHI/RHI.h"
 #include "Lapis/Math/Math.h"
 
 namespace Lapis {
@@ -32,11 +33,11 @@ public:
     Texture2D(const Image& image, const TextureSpec& spec = {});
     ~Texture2D();
 
-    void Bind(u32 slot = 0) const;
+    RHI::TextureHandle GetHandle() const { return m_Handle; }
+    RHI::Sampler GetSampler() const { return m_Sampler; }
 
     u32 GetWidth() const { return m_Width; }
     u32 GetHeight() const { return m_Height; }
-    u32 GetID() const { return m_ID; }
     const std::string& GetPath() const { return m_Path; }
     void SetPath(const std::string& path) { m_Path = path; }
 
@@ -45,7 +46,8 @@ public:
     static Ref<Texture2D> CreateChecker(u32 size, u32 cells, const Vec4& a, const Vec4& b);
 
 private:
-    u32 m_ID = 0;
+    RHI::TextureHandle m_Handle;
+    RHI::Sampler m_Sampler = RHI::Sampler::AnisoWrap;
     u32 m_Width = 0, m_Height = 0;
     std::string m_Path;
 };

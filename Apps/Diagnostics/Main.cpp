@@ -14,6 +14,7 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <optional>
 #include <sstream>
 #include <thread>
 
@@ -21,7 +22,6 @@
 #include "TestFramework.h"
 
 #include "Lapis/Lapis.h"
-#include "Lapis/Renderer/GL.h"
 
 #if defined(__linux__)
     #include <sys/utsname.h>
@@ -89,13 +89,7 @@ std::string CompilerDescription() {
 #endif
 }
 
-const char* GLStr(GLenum e) { const GLubyte* s = glGetString(e); return s ? reinterpret_cast<const char*>(s) : "?"; }
 
-int DrainGLErrors() {
-    int n = 0;
-    while (glGetError() != GL_NO_ERROR && n < 64) ++n;
-    return n;
-}
 
 // Simple pixel statistics over a region of an RGBA8 bottom-up image.
 struct RegionStats { float R = 0, G = 0, B = 0; float Variance = 0; };
@@ -163,48 +157,16 @@ int main(int argc, char** argv) {
         R.Check("Unit tests", summary.Failed == 0, Format("{} / {} passed", summary.Total - summary.Failed, summary.Total));
     }
 
-    // --------------------------------------------------- window + GL context
-    R.Section("Window and OpenGL");
+    // ------------------------------------------------------- graphics APIs
+    // Every graphics API compiled into this build gets its own window, device
+    // and renderer, draws the test scene, and has its pixels checked.
     WindowProps props;
     props.Title = "Lapis Diagnostics";
     props.Width = 960;
     props.Height = 540;
     props.VSync = false;
-    Scope<Window> window = Window::Create(props);
-    R.Check("Create window + OpenGL context", window != nullptr, window ? (window->IsHeadless() ? "headless EGL" : "native window") : "see log");
-    if (!window) {
-        R.Line("Cannot continue without an OpenGL context. Common causes: missing/old GPU driver, remote desktop session,");
-        R.Line("or a GPU without OpenGL 3.3 support. Update the graphics driver from the GPU vendor's website.");
-    } else {
-        R.Line(Format("GL_VENDOR:   {}", GLStr(GL_VENDOR)));
-        R.Line(Format("GL_RENDERER: {}", GLStr(GL_RENDERER)));
-        R.Line(Format("GL_VERSION:  {}", GLStr(GL_VERSION)));
-        R.Line(Format("GLSL:        {}", GLStr(GL_SHADING_LANGUAGE_VERSION)));
-        GLint major = 0, minor = 0, maxTex = 0, maxSamples = 0, exts = 0;
-        glGetIntegerv(GL_MAJOR_VERSION, &major);
-        glGetIntegerv(GL_MINOR_VERSION, &minor);
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTex);
-        glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
-        glGetIntegerv(GL_NUM_EXTENSIONS, &exts);
-        R.Line(Format("Max texture size {}, max MSAA samples {}, {} extensions", maxTex, maxSamples, exts));
-        R.Check("OpenGL 3.3 or newer", major > 3 || (major == 3 && minor >= 3), Format("{}.{}", major, minor));
-        if (!glDebugMessageCallback) R.Warn("GL debug output", "glDebugMessageCallback unavailable (driver < 4.3) - GL errors are less detailed");
-        DrainGLErrors();
-    }
 
-    // ----------------------------------------------------------- rendering
-    Renderer renderer;
-    bool rendererOk = false;
-    if (window) {
-        R.Section("Renderer");
-        const size_t errorsBefore = capturedErrors.size();
-        rendererOk = renderer.Init(window->GetWidth(), window->GetHeight(), 4);
-        R.Check("Renderer init (5 built-in shaders, HDR/MSAA/shadow targets)", rendererOk);
-        for (size_t i = errorsBefore; i < capturedErrors.size(); ++i) R.Body << "    " << capturedErrors[i] << "\n";
-    }
-
-    if (rendererOk) {
-        Scene scene("DiagnosticsScene");
+    auto buildTestScene = [](Scene& scene) {
         Entity ground = scene.CreateEntity("Ground");
         ground.Transform().Scale = {30, 1, 30};
         ground.Transform().Position = {0, -0.5f, 0};
@@ -230,32 +192,124 @@ int main(int argc, char** argv) {
         Entity light = scene.CreateEntity("Light");
         light.Transform().Position = {1.5f, 1.5f, 1.5f};
         light.Add<LightComponent>().Color = {0.3f, 0.6f, 1.0f};
+    };
+    auto renderFrame = [](Window& window, RHI::Device& device, Renderer& renderer, Scene& scene) {
+        window.PollEvents();
+        device.BeginFrame(window.GetWidth(), window.GetHeight());
+        scene.OnRender(renderer, window.GetAspect());
+        renderer.EndFrame();
+        device.EndFrame();
+    };
 
-        R.Section("Render test");
-        scene.OnStart();
-        for (int i = 0; i < 5; ++i) {
-            window->PollEvents();
-            scene.OnUpdate(1.0f / 60.0f);
-            scene.OnRender(renderer, window->GetAspect());
-            renderer.EndFrame(window->GetBackbufferFBO());
-            window->SwapBuffers();
+    std::vector<RHI::API> apis;
+    for (RHI::API api : {RHI::API::D3D12, RHI::API::OpenGL})
+        if (RHI::Device::IsCompiledIn(api)) apis.push_back(api);
+    std::optional<RHI::API> primary;   // first API that passed, used for the rest
+
+    for (RHI::API api : apis) {
+        const std::string name = RHI::APIName(api);
+        R.Section("Graphics API: " + name);
+        WindowProps wp = props;
+        wp.Title = "Lapis Diagnostics - " + name;
+        wp.OpenGLContext = api == RHI::API::OpenGL;
+        const size_t errorsBefore = capturedErrors.size();
+        Scope<Window> window = Window::Create(wp);
+        R.Check(name + ": create window", window != nullptr, window ? (window->IsHeadless() ? "headless" : "native window") : "see log");
+        if (!window) continue;
+        std::string error;
+        Scope<RHI::Device> device = RHI::Device::Create(api, *window, &error);
+        R.Check(name + ": create device", device != nullptr, device ? "" : error);
+        if (!device) {
+            if (api == RHI::API::OpenGL)
+                R.Line("Common causes: missing/old GPU driver, remote desktop session, or no OpenGL 4.3 support. Update the GPU driver.");
+            else
+                R.Line("Common causes: GPU or driver without DirectX 12 (feature level 11_0), outdated Windows 10, or remote desktop.");
+            continue;
         }
-        const u32 w = window->GetWidth(), h = window->GetHeight();
-        auto pixels = renderer.ReadPixels(window->GetBackbufferFBO());
-        const int glErrors = DrainGLErrors();
-        R.Check("No OpenGL errors while rendering", glErrors == 0, Format("{} error(s)", glErrors));
-        R.Check("Frame stats sane", renderer.GetStats().DrawCalls >= 4 && renderer.GetStats().Triangles > 0,
-                Format("{} draw calls, {} triangles", renderer.GetStats().DrawCalls, renderer.GetStats().Triangles));
+        const RHI::DeviceInfo& info = device->GetInfo();
+        R.Line(Format("GPU:      {}", info.GPUName));
+        R.Line(Format("Vendor:   {}", info.Vendor));
+        R.Line(Format("Version:  {}", info.Version));
+        R.Line(Format("Max MSAA: {}x   Max anisotropy: {}x", info.MaxSamples, (int)info.MaxAnisotropy));
+        RHI::SetCurrent(device.get());
+        bool passed = false;
+        {
+            Renderer renderer;
+            const bool ok = renderer.Init(*device, window->GetWidth(), window->GetHeight(), 4);
+            R.Check(name + ": renderer init (all built-in shaders + targets)", ok);
+            if (ok) {
+                GraphicsSettings high = GraphicsSettings::FromPreset(GraphicsSettings::Preset::High);
+                renderer.ApplySettings(high);
+                Scene scene("DiagnosticsScene");
+                buildTestScene(scene);
+                scene.OnStart();
+                for (int i = 0; i < 5; ++i) { scene.OnUpdate(1.0f / 60.0f); renderFrame(*window, *device, renderer, scene); }
+                u32 w = 0, h = 0;
+                auto pixels = renderer.ReadPixels(w, h);
+                R.Check(name + ": frame stats sane", renderer.GetStats().DrawCalls >= 4 && renderer.GetStats().Triangles > 0,
+                        Format("{} draw calls, {} triangles", renderer.GetStats().DrawCalls, renderer.GetStats().Triangles));
+                const RegionStats sky = Analyze(pixels, w, h, 0.1f, 0.85f, 0.9f, 0.98f);
+                const RegionStats floor = Analyze(pixels, w, h, 0.1f, 0.02f, 0.9f, 0.25f);
+                const bool skyOk = sky.B > 120 && sky.B >= sky.R;
+                const bool floorOk = floor.Variance > 20.0f;
+                const bool redOk = HasRedPixels(pixels);
+                R.Check(name + ": sky rendered (top of image is bright and blue-ish)", skyOk, Format("avg RGB {} {} {}", (int)sky.R, (int)sky.G, (int)sky.B));
+                R.Check(name + ": ground rendered (checker texture visible)", floorOk, Format("luminance variance {}", (int)floor.Variance));
+                R.Check(name + ": lit red cube visible", redOk);
+                std::string file = name;
+                for (char& c : file) if (c == ' ') c = '_';
+                const std::string shot = (logs / ("diagnostics_" + file + ".bmp")).string();
+                R.Check(name + ": screenshot written", !pixels.empty() && ImageLoader::WriteBMP(shot, w, h, pixels), shot);
 
-        const RegionStats sky = Analyze(pixels, w, h, 0.1f, 0.85f, 0.9f, 0.98f);
-        const RegionStats floor = Analyze(pixels, w, h, 0.1f, 0.02f, 0.9f, 0.25f);
-        R.Check("Sky rendered (top of image is bright and blue-ish)", sky.B > 120 && sky.B >= sky.R,
-                Format("avg RGB {} {} {}", (int)sky.R, (int)sky.G, (int)sky.B));
-        R.Check("Ground rendered (checker texture visible)", floor.Variance > 20.0f,
-                Format("luminance variance {}", (int)floor.Variance));
-        R.Check("Lit red cube visible", HasRedPixels(pixels));
-        const std::string shot = (logs / "diagnostics_render.bmp").string();
-        R.Check("Screenshot written", ImageLoader::WriteBMP(shot, w, h, pixels), shot);
+                // Every graphics option combination that changes the pipeline.
+                const GraphicsSettings low = GraphicsSettings::FromPreset(GraphicsSettings::Preset::Low);
+                GraphicsSettings ultra = GraphicsSettings::FromPreset(GraphicsSettings::Preset::Ultra);
+                ultra.MotionBlur = true;
+                ultra.RenderScale = 1.5f;
+                for (const GraphicsSettings& gs : {low, ultra}) {
+                    renderer.ApplySettings(gs);
+                    for (int i = 0; i < 3; ++i) renderFrame(*window, *device, renderer, scene);
+                }
+                R.Check(name + ": Low and Ultra presets render", capturedErrors.size() == errorsBefore,
+                        Format("{} engine error(s)", capturedErrors.size() - errorsBefore));
+                passed = skyOk && floorOk && redOk && capturedErrors.size() == errorsBefore;
+                scene.OnStop();
+            }
+            renderer.Shutdown();
+        }
+        RHI::SetCurrent(nullptr);
+        device.reset();
+        window.reset();
+        if (passed && !primary) primary = api;
+        if (api == RHI::API::D3D12 && !passed)
+            R.Line("DirectX 12 failed -> the editor and games will fall back to OpenGL automatically.");
+    }
+
+    // The remaining checks use the first API that passed.
+    Scope<Window> window;
+    Scope<RHI::Device> device;
+    Renderer renderer;
+    bool rendererOk = false;
+    if (primary) {
+        R.Section(std::string("Runtime checks (") + RHI::APIName(*primary) + ")");
+        WindowProps wp = props;
+        wp.OpenGLContext = *primary == RHI::API::OpenGL;
+        window = Window::Create(wp);
+        if (window) device = RHI::Device::Create(*primary, *window);
+        if (device) {
+            RHI::SetCurrent(device.get());
+            rendererOk = renderer.Init(*device, window->GetWidth(), window->GetHeight(), 4);
+        }
+        R.Check("Renderer ready", rendererOk);
+    } else {
+        R.Section("Runtime checks");
+        R.Check("At least one graphics API works", false, "no API passed - see the sections above");
+    }
+
+    if (rendererOk) {
+        Scene scene("DiagnosticsScene");
+        buildTestScene(scene);
+        scene.OnStart();
 
         // Luau end-to-end with GPU assets.
         R.Section("Luau scripting");
@@ -272,18 +326,14 @@ int main(int argc, char** argv) {
 
         // Performance.
         R.Section("Performance");
-        window->SetVSync(false);
-        Timer timer;
+        device->SetVSync(false);
         std::vector<double> frameMs;
         const int frames = std::stoi(args.Value("--frames", "240"));
         for (int i = 0; i < frames; ++i) {
             Timer ft;
-            window->PollEvents();
             scene.OnFixedUpdate(1.0f / 60.0f);
             scene.OnUpdate(1.0f / 60.0f);
-            scene.OnRender(renderer, window->GetAspect());
-            renderer.EndFrame(window->GetBackbufferFBO());
-            window->SwapBuffers();
+            renderFrame(*window, *device, renderer, scene);
             frameMs.push_back(ft.ElapsedMillis());
         }
         std::sort(frameMs.begin(), frameMs.end());
@@ -314,20 +364,18 @@ int main(int argc, char** argv) {
             scene->OnStart();
             if (!project->MainScript.empty()) R.Check("Main script runs", scene->GetScripts().RunFile(project->MainScript), project->MainScript);
             for (int i = 0; i < 180; ++i) {
-                window->PollEvents();
                 scene->OnFixedUpdate(1.0f / 60.0f);
                 scene->OnUpdate(1.0f / 60.0f);
-                scene->OnRender(renderer, window->GetAspect());
-                renderer.EndFrame(window->GetBackbufferFBO());
-                window->SwapBuffers();
+                renderFrame(*window, *device, renderer, *scene);
             }
             const auto& scriptErrors = scene->GetScripts().GetErrors();
             R.Check("No Luau script errors in 3 seconds of play", scriptErrors.empty(), Format("{} error(s)", scriptErrors.size()));
             for (size_t i = 0; i < std::min<size_t>(scriptErrors.size(), 10); ++i) R.Body << "    " << scriptErrors[i] << "\n";
             R.Check("No engine errors while running the project", capturedErrors.size() == errorsBefore,
                     Format("{} error(s)", capturedErrors.size() - errorsBefore));
-            auto px = renderer.ReadPixels(window->GetBackbufferFBO());
-            ImageLoader::WriteBMP((logs / "diagnostics_project.bmp").string(), window->GetWidth(), window->GetHeight(), px);
+            u32 w = 0, h = 0;
+            auto px = renderer.ReadPixels(w, h);
+            ImageLoader::WriteBMP((logs / "diagnostics_project.bmp").string(), w, h, px);
             R.Line("Project screenshot: " + (logs / "diagnostics_project.bmp").string());
             scene->OnStop();
             scene.reset();
@@ -337,6 +385,8 @@ int main(int argc, char** argv) {
     }
 
     renderer.Shutdown();
+    RHI::SetCurrent(nullptr);
+    device.reset();
     window.reset();
 
     // ----------------------------------------------------------- summary

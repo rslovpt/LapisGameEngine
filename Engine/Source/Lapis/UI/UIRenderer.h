@@ -11,21 +11,19 @@
 
 #include "Lapis/Core/Base.h"
 #include "Lapis/Math/Math.h"
+#include "Lapis/RHI/RHI.h"
 
 namespace Lapis {
 
-class Shader;
-class VertexArray;
-class VertexBuffer;
 
 class UIRenderer : NonCopyable {
 public:
     UIRenderer();
     ~UIRenderer();
 
-    bool Init();
+    bool Init(RHI::Device& device);
     void Shutdown();
-    bool IsInitialized() const { return m_FontTexture != 0; }
+    bool IsInitialized() const { return (bool)m_FontTexture; }
 
     // width/height in pixels; scale = pixels per UI unit.
     void Begin(u32 width, u32 height, float scale = 1.0f);
@@ -64,10 +62,9 @@ private:
               const Vec4& c, float mode, float radius, float param, float grow = 0.0f);
 
     std::vector<UIVertex> m_Vertices;
-    Scope<Shader>       m_Shader;
-    Scope<VertexArray>  m_VAO;
-    Ref<VertexBuffer>   m_VBO;
-    u32   m_FontTexture = 0;
+    RHI::Device*        m_Device = nullptr;
+    RHI::PipelineHandle m_Pipeline;
+    RHI::TextureHandle  m_FontTexture;
     u32   m_Width = 1, m_Height = 1;
     float m_Scale = 1.0f, m_LogicalW = 1.0f, m_LogicalH = 1.0f;
 };

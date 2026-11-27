@@ -17,6 +17,7 @@ struct WindowProps {
     bool        VSync  = true;
     bool        Resizable = true;
     int         MSAASamples = 0;   // backbuffer MSAA (the renderer does its own offscreen MSAA)
+    bool        OpenGLContext = true;   // false: plain window for D3D12 / Vulkan (no GL context)
 };
 
 class Window : NonCopyable {

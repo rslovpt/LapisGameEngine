@@ -302,7 +302,8 @@ PHASE 11 - Lapis Editor (Unreal-style)
 ------------------------------------------------------------------------------
 PHASE 12 - Multiple graphics APIs (after the first Windows test session)
 ------------------------------------------------------------------------------
-[ ] RHI abstraction: renderer talks to an interface, not OpenGL directly
+[x] RHI abstraction: renderer talks to an interface, not OpenGL directly
+    (RHI/RHI.h; OpenGL 4.5 backend verified pixel-identical to the old renderer)
 [ ] Backends: OpenGL 4.5 (current), DirectX 12, Vulkan
 [ ] DirectX 12 = DEFAULT on Windows (owner's decision). Vulkan after DX12
     (Linux / macOS via MoltenVK / Android)
@@ -311,7 +312,8 @@ PHASE 12 - Multiple graphics APIs (after the first Windows test session)
     DirectX 11 (remembered; changeable later in File > Settings)
 [ ] First-launch prompt: choose GPU/graphics API mode (remembered in settings,
     changeable later in File > Settings)
-[ ] Shader pipeline per backend (GLSL / HLSL / SPIR-V from one source)
+[x] Shader library: every built-in shader in GLSL + HLSL with shared cbuffer layouts
+[ ] SPIR-V for Vulkan
 
 
 

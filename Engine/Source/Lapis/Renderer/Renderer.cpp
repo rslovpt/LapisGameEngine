@@ -1,106 +1,170 @@
 #include "Lapis/Renderer/Renderer.h"
 
-#include "Lapis/Core/JobSystem.h"
-#include "Lapis/Renderer/PostShaders.h"
-
 #include <algorithm>
+#include <cmath>
 
+#include "Lapis/Core/JobSystem.h"
 #include "Lapis/Core/Log.h"
-#include "Lapis/Renderer/BuiltinShaders.h"
-#include "Lapis/Renderer/GL.h"
+#include "Lapis/Renderer/ShaderTypes.h"
 
 namespace Lapis {
 
 namespace {
-    constexpr u32 MaxPointLights = 16;
-    constexpr u32 ShadowSlot = 1;
+constexpr u32 MaxPointLights = (u32)ShaderTypes::MaxPointLights;
+
+// Vertex layouts.
+std::vector<RHI::VertexAttribute> MeshLayout(bool instanced, bool full) {
+    using RHI::AttribFormat;
+    std::vector<RHI::VertexAttribute> a = {{0, 0, AttribFormat::Float3, 0}};
+    if (full) {
+        a.push_back({1, 0, AttribFormat::Float3, 12});
+        a.push_back({2, 0, AttribFormat::Float2, 24});
+    }
+    if (instanced) {
+        for (u8 i = 0; i < 4; ++i) a.push_back({u8(3 + i), 1, AttribFormat::Float4, u32(i * 16)});   // model columns
+        if (full) a.push_back({7, 1, AttribFormat::Float4, 64});                                        // tint
+    }
+    return a;
+}
+} // namespace
+
+GraphicsAPI Renderer::GetAPI() const {
+    if (m_Device && m_Device->GetInfo().Api == RHI::API::D3D12) return GraphicsAPI::DirectX12;
+    if (m_Device && m_Device->GetInfo().Api == RHI::API::Vulkan) return GraphicsAPI::Vulkan;
+    return GraphicsAPI::OpenGL;
 }
 
-bool Renderer::Init(u32 width, u32 height, u32 msaaSamples) {
+// =============================================================================
+// Setup
+// =============================================================================
+void Renderer::CreateTarget(Target& t, u32 w, u32 h, RHI::Format color, RHI::Format depth, u32 samples, const char* name) {
+    w = std::max(w, 1u);
+    h = std::max(h, 1u);
+    if (t.RT && t.Width == w && t.Height == h) {
+        const RHI::TextureDesc* d = t.Color ? m_Device->GetTextureDesc(t.Color) : m_Device->GetTextureDesc(t.Depth);
+        if (d && d->Samples == samples) return;   // unchanged
+    }
+    DestroyTarget(t);
+    RHI::TextureDesc desc;
+    desc.Width = w;
+    desc.Height = h;
+    desc.Samples = samples;
+    desc.RenderTarget = true;
+    desc.Name = name;
+    if (color != RHI::Format::None) { desc.Fmt = color; t.Color = m_Device->CreateTexture(desc); }
+    if (depth != RHI::Format::None) { desc.Fmt = depth; t.Depth = m_Device->CreateTexture(desc); }
+    t.RT = m_Device->CreateRenderTarget(t.Color, t.Depth, name);
+    t.Width = w;
+    t.Height = h;
+}
+
+void Renderer::DestroyTarget(Target& t) {
+    if (!m_Device) return;
+    if (t.RT) m_Device->Destroy(t.RT);
+    if (t.Color) m_Device->Destroy(t.Color);
+    if (t.Depth) m_Device->Destroy(t.Depth);
+    t = Target{};
+}
+
+bool Renderer::Init(RHI::Device& device, u32 width, u32 height, u32 msaaSamples) {
+    m_Device = &device;
     m_Width = width ? width : 1;
     m_Height = height ? height : 1;
-
-    GLint maxSamples = 1;
-    glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
-    m_Samples = std::min<u32>(msaaSamples, (u32)std::max(maxSamples, 1));
-
-    using namespace BuiltinShaders;
-    m_LitShader    = CreateRef<Shader>("Lit", LitVertex, LitFragment);
-    m_ShadowShader = CreateRef<Shader>("ShadowDepth", ShadowVertex, ShadowFragment);
-    m_SkyShader    = CreateRef<Shader>("Sky", FullscreenVertex, SkyFragment);
-    m_LineShader   = CreateRef<Shader>("DebugLine", LineVertex, LineFragment);
-    m_SSAOShader      = CreateRef<Shader>("SSAO", FullscreenVertex, PostShaders::SSAOFragment);
-    m_BlurShader      = CreateRef<Shader>("Blur", FullscreenVertex, PostShaders::BlurFragment);
-    m_BloomDownShader = CreateRef<Shader>("BloomDown", FullscreenVertex, PostShaders::BloomDownFragment);
-    m_BloomUpShader   = CreateRef<Shader>("BloomUp", FullscreenVertex, PostShaders::BloomUpFragment);
-    m_CompositeShader = CreateRef<Shader>("Composite", FullscreenVertex, PostShaders::CompositeFragment);
-    m_FXAAShader      = CreateRef<Shader>("FXAA", FullscreenVertex, PostShaders::FXAAFragment);
-    m_UpscaleShader   = CreateRef<Shader>("Upscale", FullscreenVertex, PostShaders::UpscaleFragment);
-    m_SharpenShader   = CreateRef<Shader>("Sharpen", FullscreenVertex, PostShaders::SharpenFragment);
-    const Shader* shaders[] = {m_LitShader.get(), m_ShadowShader.get(), m_SkyShader.get(), m_LineShader.get(),
-                               m_SSAOShader.get(), m_BlurShader.get(), m_BloomDownShader.get(), m_BloomUpShader.get(),
-                               m_CompositeShader.get(), m_FXAAShader.get(), m_UpscaleShader.get(), m_SharpenShader.get()};
-    for (const Shader* s : shaders)
-        if (!s->IsValid()) { LAPIS_FATAL("Renderer: built-in shader '{}' failed", s->GetName()); return false; }
-
-    m_GPU = GPUInfo::Detect();
+    const RHI::DeviceInfo& info = device.GetInfo();
+    m_Samples = std::max(1u, std::min(msaaSamples, info.MaxSamples));
+    m_GPU = GPUInfo::FromDevice(info);
     LAPIS_INFO("GPU: {} ({}), {}", m_GPU.Name, GPUInfo::VendorString(m_GPU.Vendor), m_GPU.APIVersion);
-    m_RenderWidth = m_Width;
-    m_RenderHeight = m_Height;
-
-    FramebufferSpec hdr;
-    hdr.Width = m_RenderWidth;
-    hdr.Height = m_RenderHeight;
-    hdr.Samples = m_Samples;
-    hdr.Color = ColorFormat::RGBA16F;
-    hdr.Depth = DepthFormat::Depth24;
-    m_HDRBuffer = CreateScope<Framebuffer>(hdr);
-
-    FramebufferSpec resolve = hdr;
-    resolve.Samples = 1;                 // depth is resolved too (SSAO, motion blur)
-    m_ResolveBuffer = CreateScope<Framebuffer>(resolve);
-
-    FramebufferSpec shadow;
-    shadow.Width = shadow.Height = m_ShadowSettings.MapSize;
-    shadow.Color = ColorFormat::None;
-    shadow.Depth = DepthFormat::Depth32F;
-    shadow.DepthCompare = true;
-    m_ShadowMap = CreateScope<Framebuffer>(shadow);
-
-    if (!m_HDRBuffer->IsComplete() || !m_ResolveBuffer->IsComplete() || !m_ShadowMap->IsComplete()) {
-        LAPIS_FATAL("Renderer: could not create render targets");
-        return false;
-    }
-
-    m_EmptyVAO = CreateScope<VertexArray>();
-    m_LineVBO = CreateRef<VertexBuffer>(nullptr, sizeof(DebugVertex) * 1024, BufferUsage::Stream);
-    m_LineVAO = CreateScope<VertexArray>();
-    m_LineVAO->AddVertexBuffer(m_LineVBO, {{AttribType::Float3}, {AttribType::Float4}});
 
     m_White = Texture2D::CreateSolid({1, 1, 1, 1});
     m_Black = Texture2D::CreateSolid({0, 0, 0, 1});
+    m_ShadowMapSize = m_ShadowSettings.MapSize;
+    CreateTarget(m_ShadowMap, m_ShadowMapSize, m_ShadowMapSize, RHI::Format::None, RHI::Format::D32F, 1, "ShadowMap");
     CreatePostTargets();
-    m_InstanceVBO = CreateRef<VertexBuffer>(nullptr, sizeof(InstanceData) * 1024, BufferUsage::Stream);
-    m_ShadowInstanceVBO = CreateRef<VertexBuffer>(nullptr, sizeof(InstanceData) * 1024, BufferUsage::Stream);
-
-    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+    CreatePipelines();
+    if (!m_P.Lit || !m_P.Shadow || !m_P.Sky || !m_P.Composite || !m_P.Line) {
+        LAPIS_FATAL("Renderer: built-in shaders failed to compile on {}", RHI::APIName(info.Api));
+        return false;
+    }
     m_Initialized = true;
-    LAPIS_INFO("Renderer initialized ({}x{}, {}x MSAA, shadow map {})", m_Width, m_Height, m_Samples, m_ShadowSettings.MapSize);
+    LAPIS_INFO("Renderer initialized ({}x{}, {}x MSAA, shadow map {}, {})", m_Width, m_Height, m_Samples, m_ShadowMapSize,
+               RHI::APIName(info.Api));
     return true;
 }
 
+void Renderer::CreatePipelines() {
+    DestroyPipelines();
+    using namespace RHI;
+    using RF = RHI::Format;
+    auto make = [&](const char* shader, RF color, RF depth, u32 samples, auto&& configure) {
+        PipelineDesc d;
+        d.Shader = shader;
+        d.ColorFormat = color;
+        d.DepthFormat = depth;
+        d.Samples = samples;
+        d.Name = shader;
+        configure(d);
+        return m_Device->CreatePipeline(d);
+    };
+    auto none = [](PipelineDesc&) {};
+
+    // Scene pipelines (HDR target, MSAA).
+    m_P.Lit = make("Lit", RF::RGBA16F, RF::D24, m_Samples, [](PipelineDesc& d) {
+        d.Attributes = MeshLayout(true, true);
+        d.Strides[0] = sizeof(Vertex);
+        d.Strides[1] = sizeof(Mat4) + sizeof(Vec4);
+        d.Cull = CullMode::Back;
+        d.Depth = DepthMode::Less;
+        d.Blend = BlendMode::Opaque;
+    });
+    m_P.Sky = make("Sky", RF::RGBA16F, RF::D24, m_Samples, [](PipelineDesc& d) { d.Depth = DepthMode::LessEqualRead; });
+    m_P.Line = make("Line", RF::RGBA16F, RF::D24, m_Samples, [](PipelineDesc& d) {
+        d.Attributes = {{0, 0, AttribFormat::Float3, 0}, {1, 0, AttribFormat::Float4, 12}};
+        d.Strides[0] = sizeof(DebugVertex);
+        d.Prim = Topology::Lines;
+        d.Depth = DepthMode::Less;
+    });
+    m_P.Shadow = make("Shadow", RF::None, RF::D32F, 1, [](PipelineDesc& d) {
+        d.Attributes = MeshLayout(true, false);
+        d.Strides[0] = sizeof(Vertex);
+        d.Strides[1] = sizeof(Mat4) + sizeof(Vec4);
+        d.Cull = CullMode::None;          // single-sided geometry (planes) must still cast
+        d.Depth = DepthMode::Less;
+        d.DepthBias = 4.0f;
+        d.SlopeBias = 2.0f;
+    });
+    // Post (single-sampled).
+    m_P.SSAO = make("SSAO", RF::RGBA8, RF::None, 1, none);
+    m_P.Blur = make("Blur", RF::RGBA8, RF::None, 1, none);
+    m_P.BloomDown = make("BloomDown", RF::RGBA16F, RF::None, 1, none);
+    m_P.BloomUp = make("BloomUp", RF::RGBA16F, RF::None, 1, [](PipelineDesc& d) { d.Blend = BlendMode::Additive; });
+    m_P.Composite = make("Composite", RF::RGBA8, RF::None, 1, none);
+    m_P.FXAA = make("FXAA", RF::RGBA8, RF::None, 1, none);
+    m_P.Upscale = make("Upscale", RF::RGBA8, RF::None, 1, none);
+    m_P.Sharpen = make("Sharpen", RF::RGBA8, RF::None, 1, none);
+    m_PipelineSamples = m_Samples;
+}
+
+void Renderer::DestroyPipelines() {
+    if (!m_Device) return;
+    RHI::PipelineHandle* all[] = {&m_P.Lit, &m_P.Shadow, &m_P.Sky, &m_P.Line, &m_P.SSAO, &m_P.Blur, &m_P.BloomDown,
+                                  &m_P.BloomUp, &m_P.Composite, &m_P.FXAA, &m_P.Upscale, &m_P.Sharpen};
+    for (RHI::PipelineHandle* p : all) {
+        if (*p) m_Device->Destroy(*p);
+        *p = {};
+    }
+}
+
 void Renderer::Shutdown() {
-    m_LitShader.reset(); m_ShadowShader.reset(); m_SkyShader.reset(); m_LineShader.reset();
-    m_SSAOShader.reset(); m_BlurShader.reset(); m_BloomDownShader.reset(); m_BloomUpShader.reset();
-    m_CompositeShader.reset(); m_FXAAShader.reset(); m_UpscaleShader.reset(); m_SharpenShader.reset();
-    m_HDRBuffer.reset(); m_ResolveBuffer.reset(); m_ShadowMap.reset();
-    m_AOBuffer.reset(); m_AOBlurBuffer.reset(); m_LDR[0].reset(); m_LDR[1].reset(); m_OutBuffer.reset();
+    if (!m_Device) return;
+    DestroyPipelines();
+    DestroyTarget(m_HDR); DestroyTarget(m_Resolve); DestroyTarget(m_ShadowMap);
+    DestroyTarget(m_AO); DestroyTarget(m_AOBlur); DestroyTarget(m_LDR[0]); DestroyTarget(m_LDR[1]); DestroyTarget(m_Out);
+    for (Target& t : m_BloomMips) DestroyTarget(t);
     m_BloomMips.clear();
-    m_EmptyVAO.reset(); m_LineVAO.reset(); m_LineVBO.reset(); m_White.reset(); m_Black.reset();
-    m_PointLights.clear(); m_Lines.clear(); m_InstanceData.clear();
-    m_InstanceVBO.reset(); m_ShadowInstanceVBO.reset();
-    m_DrawList.clear();
+    m_White.reset(); m_Black.reset();
+    m_PointLights.clear(); m_Lines.clear(); m_InstanceData.clear(); m_DrawList.clear();
     m_Initialized = false;
+    m_Device = nullptr;
 }
 
 void Renderer::Resize(u32 width, u32 height) {
@@ -110,41 +174,31 @@ void Renderer::Resize(u32 width, u32 height) {
     CreatePostTargets();
 }
 
-// (Re)creates every resolution-dependent target from the output size and
-// the render scale. Framebuffer::Resize is a no-op when nothing changed.
+// (Re)creates every resolution-dependent target. Unchanged targets are kept.
 void Renderer::CreatePostTargets() {
+    using RHI::Format;
     const float scale = Clamp(m_Settings.RenderScale, 0.25f, 2.0f);
     m_RenderWidth = std::max(1u, (u32)std::lround(m_Width * scale));
     m_RenderHeight = std::max(1u, (u32)std::lround(m_Height * scale));
-    m_HDRBuffer->Resize(m_RenderWidth, m_RenderHeight);
-    m_ResolveBuffer->Resize(m_RenderWidth, m_RenderHeight);
-
-    auto make = [](Scope<Framebuffer>& fb, u32 w, u32 h, ColorFormat format) {
-        w = std::max(w, 1u);
-        h = std::max(h, 1u);
-        if (fb) { fb->Resize(w, h); return; }
-        FramebufferSpec spec;
-        spec.Width = w;
-        spec.Height = h;
-        spec.Color = format;
-        spec.Depth = DepthFormat::None;
-        fb = CreateScope<Framebuffer>(spec);
-    };
-    make(m_AOBuffer, m_RenderWidth / 2, m_RenderHeight / 2, ColorFormat::RGBA8);
-    make(m_AOBlurBuffer, m_RenderWidth / 2, m_RenderHeight / 2, ColorFormat::RGBA8);
-    make(m_LDR[0], m_RenderWidth, m_RenderHeight, ColorFormat::RGBA8);
-    make(m_LDR[1], m_RenderWidth, m_RenderHeight, ColorFormat::RGBA8);
-    make(m_OutBuffer, m_Width, m_Height, ColorFormat::RGBA8);
+    const u32 rw = m_RenderWidth, rh = m_RenderHeight;
+    CreateTarget(m_HDR, rw, rh, Format::RGBA16F, Format::D24, m_Samples, "HDR");
+    CreateTarget(m_Resolve, rw, rh, Format::RGBA16F, Format::D24, 1, "Resolve");
+    CreateTarget(m_AO, rw / 2, rh / 2, Format::RGBA8, Format::None, 1, "SSAO");
+    CreateTarget(m_AOBlur, rw / 2, rh / 2, Format::RGBA8, Format::None, 1, "SSAOBlur");
+    CreateTarget(m_LDR[0], rw, rh, Format::RGBA8, Format::None, 1, "LDR0");
+    CreateTarget(m_LDR[1], rw, rh, Format::RGBA8, Format::None, 1, "LDR1");
+    CreateTarget(m_Out, m_Width, m_Height, Format::RGBA8, Format::None, 1, "Output");
 
     // Bloom chain: half resolution down to ~8 px, at most 6 levels.
-    u32 w = m_RenderWidth / 2, h = m_RenderHeight / 2;
+    u32 w = rw / 2, h = rh / 2;
     size_t level = 0;
     for (; level < 6 && w >= 8 && h >= 8; ++level, w /= 2, h /= 2) {
         if (level >= m_BloomMips.size()) m_BloomMips.emplace_back();
-        make(m_BloomMips[level], w, h, ColorFormat::RGBA16F);
+        CreateTarget(m_BloomMips[level], w, h, Format::RGBA16F, Format::None, 1, "Bloom");
     }
-    m_BloomMips.resize(std::max<size_t>(level, 1));
-    if (!m_BloomMips[0]) make(m_BloomMips[0], 1, 1, ColorFormat::RGBA16F);
+    if (level == 0) { if (m_BloomMips.empty()) m_BloomMips.emplace_back(); CreateTarget(m_BloomMips[0], 1, 1, Format::RGBA16F, Format::None, 1, "Bloom"); level = 1; }
+    for (size_t i = level; i < m_BloomMips.size(); ++i) DestroyTarget(m_BloomMips[i]);
+    m_BloomMips.resize(level);
     m_HasPrevFrame = false;
 }
 
@@ -159,22 +213,23 @@ void Renderer::ApplySettings(const GraphicsSettings& requested) {
     m_ShadowSettings.Enabled = s.ShadowMapSize() > 0;
     if (s.ShadowMapSize() > 0) m_ShadowSettings.MapSize = s.ShadowMapSize();
     m_ShadowSettings.Distance = s.ShadowDistance;
+    m_Device->SetMaxAnisotropy(s.AnisotropyLevel());
     if (rescale) CreatePostTargets();
 }
 
 void Renderer::SetMSAA(u32 samples) {
     if (!m_Initialized) return;
-    GLint maxSamples = 1;
-    glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
-    samples = std::max<u32>(1, std::min<u32>(samples, (u32)std::max(maxSamples, 1)));
+    samples = std::max<u32>(1, std::min<u32>(samples, m_Device->GetInfo().MaxSamples));
     if (samples == m_Samples) return;
     m_Samples = samples;
-    FramebufferSpec spec = m_HDRBuffer->GetSpec();
-    spec.Samples = samples;
-    m_HDRBuffer = CreateScope<Framebuffer>(spec);
+    CreateTarget(m_HDR, m_RenderWidth, m_RenderHeight, RHI::Format::RGBA16F, RHI::Format::D24, m_Samples, "HDR");
+    CreatePipelines();   // scene pipelines are created for a sample count
     m_HasPrevFrame = false;
 }
 
+// =============================================================================
+// Frame
+// =============================================================================
 void Renderer::BeginFrame(const CameraView& camera, const Environment& env) {
     m_Camera = camera;
     m_Env = env;
@@ -182,8 +237,10 @@ void Renderer::BeginFrame(const CameraView& camera, const Environment& env) {
     m_PointLights.clear();
     m_Lines.clear();
     m_Stats = {};
-    if (m_ShadowMap && m_ShadowMap->GetSpec().Width != m_ShadowSettings.MapSize)
-        m_ShadowMap->Resize(m_ShadowSettings.MapSize, m_ShadowSettings.MapSize);
+    if (m_Initialized && m_ShadowSettings.MapSize != m_ShadowMapSize) {
+        m_ShadowMapSize = m_ShadowSettings.MapSize;
+        CreateTarget(m_ShadowMap, m_ShadowMapSize, m_ShadowMapSize, RHI::Format::None, RHI::Format::D32F, 1, "ShadowMap");
+    }
 }
 
 void Renderer::AddPointLight(const PointLight& light) {
@@ -196,8 +253,9 @@ void Renderer::Submit(const Ref<Mesh>& mesh, const Ref<Material>& material, cons
     m_DrawList.push_back({mesh.get(), material.get(), transform, tint, mesh->GetBounds().Transformed(transform)});
 }
 
-void Renderer::EndFrame(u32 targetFBO) {
+void Renderer::EndFrame() {
     if (!m_Initialized) return;
+    const u32 drawsBefore = m_Device->FrameDrawCalls;
 
     // Group by material, then mesh: identical neighbours become instanced batches.
     std::sort(m_DrawList.begin(), m_DrawList.end(), [](const DrawItem& a, const DrawItem& b) {
@@ -222,10 +280,23 @@ void Renderer::EndFrame(u32 targetFBO) {
     const bool shadows = m_Sun.CastShadows && m_ShadowSettings.Enabled;
     if (shadows) ShadowPass(lightSpace);
     MainPass(lightSpace, shadows);
-    SkyPass();
-    LinePass();
-    PostPass(targetFBO);
+    PostPass();
     m_Stats.PointLights = (u32)m_PointLights.size();
+    m_Stats.DrawCalls = m_Device->FrameDrawCalls - drawsBefore;
+}
+
+RHI::BufferView Renderer::BuildBatches(const std::vector<const DrawItem*>& items, std::vector<Batch>& out) {
+    m_InstanceData.clear();
+    m_InstanceData.reserve(items.size());
+    for (const DrawItem* item : items) {
+        if (!out.empty() && out.back().MeshPtr == item->MeshPtr && out.back().MaterialPtr == item->MaterialPtr)
+            ++out.back().Count;
+        else
+            out.push_back({item->MeshPtr, item->MaterialPtr, m_InstanceData.size(), 1});
+        m_InstanceData.push_back({item->Transform, item->Tint});
+    }
+    if (m_InstanceData.empty()) return {};
+    return m_Device->Transient(m_InstanceData.data(), m_InstanceData.size() * sizeof(InstanceData), sizeof(InstanceData));
 }
 
 void Renderer::ShadowPass(Mat4& lightSpace) {
@@ -239,23 +310,13 @@ void Renderer::ShadowPass(Mat4& lightSpace) {
     Mat4 proj = Orthographic(-radius, radius, -radius, radius, 0.1f, radius * 4.0f);
 
     // Snap to shadow-map texels so shadows don't shimmer as the camera moves.
-    const float half = (float)m_ShadowSettings.MapSize * 0.5f;
+    const float half = (float)m_ShadowMapSize * 0.5f;
     const Vec3 origin = (proj * view).TransformPoint(Vec3(0.0f)) * half;
     proj(0, 3) += (std::round(origin.x) - origin.x) / half;
     proj(1, 3) += (std::round(origin.y) - origin.y) / half;
     lightSpace = proj * view;
 
     const Frustum lightFrustum(lightSpace);
-    m_ShadowMap->Bind();
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glClear(GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(2.0f, 4.0f);
-    glDisable(GL_CULL_FACE); // single-sided geometry (planes) must still cast
-
-    m_ShadowShader->Bind();
-    m_ShadowShader->SetMat4("u_LightSpace", lightSpace);
     std::vector<const DrawItem*> casters;
     casters.reserve(m_DrawList.size());
     for (const DrawItem& item : m_DrawList) {
@@ -264,65 +325,49 @@ void Renderer::ShadowPass(Mat4& lightSpace) {
         casters.push_back(&item);
     }
     std::vector<Batch> batches;
-    BuildBatches(casters, batches, *m_ShadowInstanceVBO);
+    const RHI::BufferView instances = BuildBatches(casters, batches);
+
+    RHI::ClearValues clear;
+    clear.Depth = true;
+    m_Device->BeginPass(m_ShadowMap.RT, clear);
+    m_Device->SetPipeline(m_P.Shadow);
+    ShaderTypes::MatrixOnly cb{lightSpace};
+    m_Device->SetConstants(0, &cb, sizeof(cb));
     for (const Batch& b : batches) {
-        b.MeshPtr->DrawInstanced(m_ShadowInstanceVBO->GetID(), b.First * sizeof(InstanceData), b.Count);
-        ++m_Stats.DrawCalls;
+        b.MeshPtr->Bind(*m_Device);
+        m_Device->SetVertexBuffer(1, {instances.Buffer, instances.Offset + b.First * sizeof(InstanceData), sizeof(InstanceData)});
+        m_Device->DrawIndexed(b.MeshPtr->GetIndexCount(), b.Count);
     }
-    glDisable(GL_POLYGON_OFFSET_FILL);
+    m_Device->EndPass();
 }
 
 void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
-    m_HDRBuffer->Bind();
-    const Vec3 fog = m_Env.SkyHorizon;
-    glClearColor(fog.x, fog.y, fog.z, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-    glDisable(GL_BLEND);
-
     const Mat4 viewProj = m_Camera.ViewProjection();
     const Frustum frustum(viewProj);
 
-    Shader& s = *m_LitShader;
-    s.Bind();
-    s.SetMat4("u_ViewProjection", viewProj);
-    s.SetMat4("u_LightSpace", lightSpace);
-    s.SetVec3("u_CameraPos", m_Camera.Position);
-    s.SetVec3("u_SunDirection", Normalize(m_Sun.Direction));
-    s.SetVec3("u_SunColor", m_Sun.Color * m_Sun.Intensity);
-    s.SetVec3("u_AmbientSky", m_Env.SkyZenith * m_Env.AmbientIntensity * 1.2f);
-    s.SetVec3("u_AmbientGround", m_Env.SkyGround * m_Env.AmbientIntensity);
-    s.SetVec3("u_FogColor", m_Env.SkyHorizon);
-    s.SetFloat("u_FogDensity", m_Env.FogDensity);
-    s.SetVec3("u_SkyZenith", m_Env.SkyZenith);
-    s.SetVec3("u_SkyHorizon", m_Env.SkyHorizon);
-    s.SetVec3("u_SkyGround", m_Env.SkyGround);
-    s.SetFloat("u_EnvIntensity", m_Env.ReflectionIntensity);
-    s.SetInt("u_AlbedoMap", 0);
-    s.SetInt("u_ShadowMap", (int)ShadowSlot);
-    s.SetInt("u_ShadowsEnabled", shadows ? 1 : 0);
-    s.SetFloat("u_ShadowTexel", 1.0f / (float)m_ShadowSettings.MapSize);
-    s.SetInt("u_PCFRadius", Clamp(m_Settings.ShadowSoftness, 0, 2));
-
-    glActiveTexture(GL_TEXTURE0 + ShadowSlot);
-    glBindTexture(GL_TEXTURE_2D, m_ShadowMap->GetDepthTexture());
-
-    s.SetInt("u_PointLightCount", (int)m_PointLights.size());
+    // Pass constants.
+    ShaderTypes::LitPass pass{};
+    pass.ViewProjection = viewProj;
+    pass.LightSpace = lightSpace;
+    pass.CameraPos = Vec4(m_Camera.Position, 1.0f);
+    pass.SunDirection = Vec4(Normalize(m_Sun.Direction), 0.0f);
+    pass.SunColor = Vec4(m_Sun.Color * m_Sun.Intensity, 0.0f);
+    pass.AmbientSky = Vec4(m_Env.SkyZenith * m_Env.AmbientIntensity * 1.2f, 0.0f);
+    pass.AmbientGround = Vec4(m_Env.SkyGround * m_Env.AmbientIntensity, 0.0f);
+    pass.FogColorDensity = Vec4(m_Env.SkyHorizon, m_Env.FogDensity);
+    pass.SkyZenith = Vec4(m_Env.SkyZenith, 0.0f);
+    pass.SkyHorizon = Vec4(m_Env.SkyHorizon, 0.0f);
+    pass.SkyGround = Vec4(m_Env.SkyGround, 0.0f);
+    pass.Params = Vec4(m_Env.ReflectionIntensity, 1.0f / (float)m_ShadowMapSize, shadows ? 1.0f : 0.0f,
+                       (float)Clamp(m_Settings.ShadowSoftness, 0, 2));
+    pass.LightCount = Vec4((float)m_PointLights.size(), 0, 0, 0);
     for (size_t i = 0; i < m_PointLights.size(); ++i) {
         const PointLight& l = m_PointLights[i];
-        const std::string base = "u_PointLights[" + std::to_string(i) + "].";
-        s.SetVec3(base + "Position", l.Position);
-        s.SetVec3(base + "Color", l.Color * l.Intensity);
-        s.SetFloat(base + "Range", l.Range);
+        pass.Lights[i].PositionRange = Vec4(l.Position, l.Range);
+        pass.Lights[i].Color = Vec4(l.Color * l.Intensity, 0.0f);
     }
 
-    static const Material s_DefaultMaterial;
-    // Frustum culling runs on the job system; compaction keeps draw order.
+    // Frustum + draw distance culling on the job system; compaction keeps draw order.
     std::vector<u8> inside(m_DrawList.size());
     const Vec3 eye = m_Camera.Position;
     const float drawDistance = m_Settings.DrawDistance;
@@ -341,227 +386,199 @@ void Renderer::MainPass(const Mat4& lightSpace, bool shadows) {
         visible.push_back(&m_DrawList[i]);
     }
     std::vector<Batch> batches;
-    BuildBatches(visible, batches, *m_InstanceVBO);
+    const RHI::BufferView instances = BuildBatches(visible, batches);
 
+    RHI::ClearValues clear;
+    clear.Color = clear.Depth = true;
+    clear.Rgba[0] = m_Env.SkyHorizon.x;
+    clear.Rgba[1] = m_Env.SkyHorizon.y;
+    clear.Rgba[2] = m_Env.SkyHorizon.z;
+    m_Device->BeginPass(m_HDR.RT, clear);
+    m_Device->SetPipeline(m_P.Lit);
+    m_Device->SetConstants(0, &pass, sizeof(pass));
+    m_Device->SetTexture(1, m_ShadowMap.Depth, RHI::Sampler::ShadowCompare);   // always a depth texture
+
+    static const Material s_DefaultMaterial;
     const Material* bound = nullptr;
     for (const Batch& b : batches) {
         const Material* mat = b.MaterialPtr ? b.MaterialPtr : &s_DefaultMaterial;
         if (mat != bound) {
             bound = mat;
-            s.SetVec4("u_Albedo", mat->Albedo);
-            s.SetVec3("u_Emissive", mat->Emissive);
-            s.SetFloat("u_Metallic", mat->Metallic);
-            s.SetFloat("u_Roughness", mat->Roughness);
-            s.SetInt("u_Unlit", mat->Unlit ? 1 : 0);
-            s.SetVec2("u_Tiling", mat->Tiling);
-            (mat->AlbedoMap ? mat->AlbedoMap : m_White)->Bind(0);
-            if (mat->AlbedoMap && m_GPU.MaxAnisotropy > 1.0f)
-                glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, std::min(m_Settings.AnisotropyLevel(), m_GPU.MaxAnisotropy));
+            ShaderTypes::Material m;
+            m.Albedo = mat->Albedo;
+            m.EmissiveMetallic = Vec4(mat->Emissive, mat->Metallic);
+            m.Params = Vec4(mat->Roughness, mat->Unlit ? 1.0f : 0.0f, mat->Tiling.x, mat->Tiling.y);
+            m_Device->SetConstants(1, &m, sizeof(m));
+            const Texture2D* tex = mat->AlbedoMap ? mat->AlbedoMap.get() : m_White.get();
+            m_Device->SetTexture(0, tex->GetHandle(), tex->GetSampler());
         }
-        b.MeshPtr->DrawInstanced(m_InstanceVBO->GetID(), b.First * sizeof(InstanceData), b.Count);
-        ++m_Stats.DrawCalls;
+        b.MeshPtr->Bind(*m_Device);
+        m_Device->SetVertexBuffer(1, {instances.Buffer, instances.Offset + b.First * sizeof(InstanceData), sizeof(InstanceData)});
+        m_Device->DrawIndexed(b.MeshPtr->GetIndexCount(), b.Count);
         m_Stats.Instances += b.Count;
         m_Stats.Triangles += b.MeshPtr->GetIndexCount() / 3 * b.Count;
     }
-}
 
-void Renderer::BuildBatches(const std::vector<const DrawItem*>& items, std::vector<Batch>& out, VertexBuffer& buffer) {
-    m_InstanceData.clear();
-    m_InstanceData.reserve(items.size());
-    for (const DrawItem* item : items) {
-        if (!out.empty() && out.back().MeshPtr == item->MeshPtr && out.back().MaterialPtr == item->MaterialPtr)
-            ++out.back().Count;
-        else
-            out.push_back({item->MeshPtr, item->MaterialPtr, m_InstanceData.size(), 1});
-        m_InstanceData.push_back({item->Transform, item->Tint});
-    }
-    if (!m_InstanceData.empty()) buffer.SetData(m_InstanceData.data(), m_InstanceData.size() * sizeof(InstanceData));
+    SkyPass();
+    LinePass();
+    m_Device->EndPass();
 }
 
 void Renderer::SkyPass() {
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_CULL_FACE);
-    m_SkyShader->Bind();
-    m_SkyShader->SetMat4("u_InverseViewProjection", Inverse(m_Camera.ViewProjection()));
-    m_SkyShader->SetVec3("u_CameraPos", m_Camera.Position);
-    m_SkyShader->SetVec3("u_SunDirection", Normalize(m_Sun.Direction));
-    m_SkyShader->SetVec3("u_SunColor", m_Sun.Color * m_Sun.Intensity);
-    m_SkyShader->SetVec3("u_SkyZenith", m_Env.SkyZenith);
-    m_SkyShader->SetVec3("u_SkyHorizon", m_Env.SkyHorizon);
-    m_SkyShader->SetVec3("u_SkyGround", m_Env.SkyGround);
-    m_EmptyVAO->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    ++m_Stats.DrawCalls;
-    glDepthMask(GL_TRUE);
-    glDepthFunc(GL_LESS);
+    ShaderTypes::Sky cb;
+    cb.InvViewProjection = Inverse(m_Camera.ViewProjection());
+    cb.CameraPos = Vec4(m_Camera.Position, 1.0f);
+    cb.SunDirection = Vec4(Normalize(m_Sun.Direction), 0.0f);
+    cb.SunColor = Vec4(m_Sun.Color * m_Sun.Intensity, 0.0f);
+    cb.Zenith = Vec4(m_Env.SkyZenith, 0.0f);
+    cb.Horizon = Vec4(m_Env.SkyHorizon, 0.0f);
+    cb.Ground = Vec4(m_Env.SkyGround, 0.0f);
+    m_Device->SetPipeline(m_P.Sky);
+    m_Device->SetConstants(0, &cb, sizeof(cb));
+    m_Device->Draw(3);
 }
 
 void Renderer::LinePass() {
     if (m_Lines.empty()) return;
-    m_LineVBO->SetData(m_Lines.data(), m_Lines.size() * sizeof(DebugVertex));
-    m_LineShader->Bind();
-    m_LineShader->SetMat4("u_ViewProjection", m_Camera.ViewProjection());
-    m_LineVAO->Bind();
-    glDrawArrays(GL_LINES, 0, (GLsizei)m_Lines.size());
-    ++m_Stats.DrawCalls;
+    const RHI::BufferView v = m_Device->Transient(m_Lines.data(), m_Lines.size() * sizeof(DebugVertex), sizeof(DebugVertex));
+    ShaderTypes::MatrixOnly cb{m_Camera.ViewProjection()};
+    m_Device->SetPipeline(m_P.Line);
+    m_Device->SetConstants(0, &cb, sizeof(cb));
+    m_Device->SetVertexBuffer(0, v);
+    m_Device->Draw((u32)m_Lines.size());
 }
 
-void Renderer::FullscreenPass() {
-    m_EmptyVAO->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    ++m_Stats.DrawCalls;
+// =============================================================================
+// Post processing
+// =============================================================================
+void Renderer::FullscreenPass(RHI::PipelineHandle pipeline) {
+    m_Device->SetPipeline(pipeline);
+    m_Device->Draw(3);
 }
 
 void Renderer::SSAOPass() {
-    const Mat4& proj = m_Camera.Projection;
-    m_AOBuffer->Bind();
-    m_SSAOShader->Bind();
-    m_SSAOShader->SetInt("u_Depth", 0);
-    m_SSAOShader->SetMat4("u_Projection", proj);
-    m_SSAOShader->SetMat4("u_InvProjection", Inverse(proj));
-    m_SSAOShader->SetVec2("u_DepthTexel", {1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight});
-    m_SSAOShader->SetFloat("u_Radius", m_Settings.AORadius);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_ResolveBuffer->GetDepthTexture());
-    FullscreenPass();
+    ShaderTypes::SSAO cb;
+    cb.Projection = m_Camera.Projection;
+    cb.InvProjection = Inverse(m_Camera.Projection);
+    cb.Params = Vec4(1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight, m_Settings.AORadius, 0.0f);
+    m_Device->BeginPass(m_AO.RT);
+    m_Device->SetPipeline(m_P.SSAO);
+    m_Device->SetConstants(0, &cb, sizeof(cb));
+    m_Device->SetTexture(0, m_Resolve.Depth, RHI::Sampler::PointClamp);
+    m_Device->Draw(3);
+    m_Device->EndPass();
 
-    m_AOBlurBuffer->Bind();
-    m_BlurShader->Bind();
-    m_BlurShader->SetInt("u_Source", 0);
-    m_BlurShader->SetVec2("u_Texel", {1.0f / (float)m_AOBuffer->GetSpec().Width, 1.0f / (float)m_AOBuffer->GetSpec().Height});
-    glBindTexture(GL_TEXTURE_2D, m_AOBuffer->GetColorTexture());
-    FullscreenPass();
+    ShaderTypes::Texel blur{Vec4(1.0f / (float)m_AO.Width, 1.0f / (float)m_AO.Height, 0, 0)};
+    m_Device->BeginPass(m_AOBlur.RT);
+    m_Device->SetPipeline(m_P.Blur);
+    m_Device->SetConstants(0, &blur, sizeof(blur));
+    m_Device->SetTexture(0, m_AO.Color, RHI::Sampler::LinearClamp);
+    m_Device->Draw(3);
+    m_Device->EndPass();
 }
 
 void Renderer::BloomPass() {
     // Downsample chain (first pass thresholds the HDR scene).
-    m_BloomDownShader->Bind();
-    m_BloomDownShader->SetInt("u_Source", 0);
-    m_BloomDownShader->SetFloat("u_Threshold", m_Settings.BloomThreshold);
-    glActiveTexture(GL_TEXTURE0);
-    u32 srcTex = m_ResolveBuffer->GetColorTexture();
-    Vec2 srcTexel{1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight};
+    RHI::TextureHandle src = m_Resolve.Color;
+    Vec2 texel{1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight};
     for (size_t i = 0; i < m_BloomMips.size(); ++i) {
-        Framebuffer& dst = *m_BloomMips[i];
-        dst.Bind();
-        m_BloomDownShader->SetInt("u_FirstPass", i == 0 ? 1 : 0);
-        m_BloomDownShader->SetVec2("u_SrcTexel", srcTexel);
-        glBindTexture(GL_TEXTURE_2D, srcTex);
-        FullscreenPass();
-        srcTex = dst.GetColorTexture();
-        srcTexel = {1.0f / (float)dst.GetSpec().Width, 1.0f / (float)dst.GetSpec().Height};
+        const Target& dst = m_BloomMips[i];
+        ShaderTypes::BloomDown cb{Vec4(texel.x, texel.y, i == 0 ? 1.0f : 0.0f, m_Settings.BloomThreshold)};
+        m_Device->BeginPass(dst.RT);
+        m_Device->SetPipeline(m_P.BloomDown);
+        m_Device->SetConstants(0, &cb, sizeof(cb));
+        m_Device->SetTexture(0, src, RHI::Sampler::LinearClamp);
+        m_Device->Draw(3);
+        m_Device->EndPass();
+        src = dst.Color;
+        texel = {1.0f / (float)dst.Width, 1.0f / (float)dst.Height};
     }
     // Upsample back up, adding each level onto the next larger one.
-    m_BloomUpShader->Bind();
-    m_BloomUpShader->SetInt("u_Source", 0);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE);
     for (size_t i = m_BloomMips.size() - 1; i > 0; --i) {
-        const Framebuffer& src = *m_BloomMips[i];
-        m_BloomMips[i - 1]->Bind();
-        m_BloomUpShader->SetVec2("u_SrcTexel", {1.0f / (float)src.GetSpec().Width, 1.0f / (float)src.GetSpec().Height});
-        glBindTexture(GL_TEXTURE_2D, src.GetColorTexture());
-        FullscreenPass();
+        const Target& s = m_BloomMips[i];
+        ShaderTypes::Texel cb{Vec4(1.0f / (float)s.Width, 1.0f / (float)s.Height, 0, 0)};
+        m_Device->BeginPass(m_BloomMips[i - 1].RT);
+        m_Device->SetPipeline(m_P.BloomUp);
+        m_Device->SetConstants(0, &cb, sizeof(cb));
+        m_Device->SetTexture(0, s.Color, RHI::Sampler::LinearClamp);
+        m_Device->Draw(3);
+        m_Device->EndPass();
     }
-    glDisable(GL_BLEND);
 }
 
-void Renderer::PostPass(u32 targetFBO) {
+void Renderer::PostPass() {
     // Resolve MSAA -> single-sample HDR color + depth textures.
-    m_HDRBuffer->BlitTo(m_ResolveBuffer.get(), true, true);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
+    m_Device->Resolve(m_HDR.RT, m_Resolve.RT);
 
     const GraphicsSettings& gs = m_Settings;
     if (gs.AmbientOcclusion) SSAOPass();
-    if (gs.Bloom && gs.BloomIntensity > 0.0f) BloomPass();
+    const bool bloom = gs.Bloom && gs.BloomIntensity > 0.0f;
+    if (bloom) BloomPass();
 
-    // Which LDR passes follow the composite?
     const bool fxaa = gs.FXAA();
     const bool upscale = m_RenderWidth != m_Width || m_RenderHeight != m_Height;
     const bool sharpen = gs.Sharpness > 0.001f;
 
     // ---- composite: HDR -> LDR ----
-    if (fxaa || upscale || sharpen) m_LDR[0]->Bind();
-    else Framebuffer::BindTarget(targetFBO, m_Width, m_Height);
-    Shader& c = *m_CompositeShader;
-    c.Bind();
-    c.SetInt("u_HDR", 0);
-    c.SetInt("u_Depth", 1);
-    c.SetInt("u_AO", 2);
-    c.SetInt("u_Bloom", 3);
-    c.SetFloat("u_Exposure", m_Env.Exposure * gs.Exposure);
-    c.SetInt("u_Tonemapper", gs.Tonemapper);
-    c.SetFloat("u_Contrast", gs.Contrast);
-    c.SetFloat("u_Saturation", gs.Saturation);
-    c.SetFloat("u_Temperature", gs.Temperature);
-    c.SetFloat("u_Gamma", gs.Gamma);
-    c.SetFloat("u_Vignette", gs.Vignette);
-    c.SetFloat("u_Grain", gs.FilmGrain);
-    c.SetFloat("u_Chromatic", gs.ChromaticAberration);
-    c.SetFloat("u_BloomIntensity", gs.Bloom ? gs.BloomIntensity : 0.0f);
-    c.SetFloat("u_AOIntensity", gs.AmbientOcclusion ? gs.AOIntensity : 0.0f);
+    ShaderTypes::Composite c;
     const Mat4 viewProj = m_Camera.ViewProjection();
-    c.SetFloat("u_MotionBlur", gs.MotionBlur && m_HasPrevFrame ? gs.MotionBlurStrength : 0.0f);
-    c.SetMat4("u_InvViewProj", Inverse(viewProj));
-    c.SetMat4("u_PrevViewProj", m_PrevViewProj);
-    c.SetFloat("u_Time", m_Time);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_ResolveBuffer->GetColorTexture());
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, m_ResolveBuffer->GetDepthTexture());
-    glActiveTexture(GL_TEXTURE0 + 2);
-    glBindTexture(GL_TEXTURE_2D, gs.AmbientOcclusion ? m_AOBlurBuffer->GetColorTexture() : m_White->GetID());
-    glActiveTexture(GL_TEXTURE0 + 3);
-    glBindTexture(GL_TEXTURE_2D, gs.Bloom ? m_BloomMips[0]->GetColorTexture() : m_Black->GetID());
-    FullscreenPass();
-    glActiveTexture(GL_TEXTURE0);
+    c.InvViewProj = Inverse(viewProj);
+    c.PrevViewProj = m_PrevViewProj;
+    c.A = Vec4(m_Env.Exposure * gs.Exposure, (float)gs.Tonemapper, gs.Contrast, gs.Saturation);
+    c.B = Vec4(gs.Temperature, gs.Gamma, gs.Vignette, gs.FilmGrain);
+    c.C = Vec4(gs.ChromaticAberration, bloom ? gs.BloomIntensity : 0.0f, gs.AmbientOcclusion ? gs.AOIntensity : 0.0f,
+               gs.MotionBlur && m_HasPrevFrame ? gs.MotionBlurStrength : 0.0f);
+    c.D = Vec4(m_Time, 0, 0, 0);
+    m_Device->BeginPass(fxaa || upscale || sharpen ? m_LDR[0].RT : RHI::RenderTargetHandle{});
+    m_Device->SetPipeline(m_P.Composite);
+    m_Device->SetConstants(0, &c, sizeof(c));
+    m_Device->SetTexture(0, m_Resolve.Color, RHI::Sampler::LinearClamp);
+    m_Device->SetTexture(1, m_Resolve.Depth, RHI::Sampler::PointClamp);
+    m_Device->SetTexture(2, gs.AmbientOcclusion ? m_AOBlur.Color : m_White->GetHandle(), RHI::Sampler::LinearClamp);
+    m_Device->SetTexture(3, bloom ? m_BloomMips[0].Color : m_Black->GetHandle(), RHI::Sampler::LinearClamp);
+    m_Device->Draw(3);
+    m_Device->EndPass();
 
     // ---- LDR chain: FXAA (internal) -> upscale (output) -> sharpen (output) ----
-    const Framebuffer* current = m_LDR[0].get();
+    const Target* current = &m_LDR[0];
     if (fxaa) {
         const bool last = !upscale && !sharpen;
-        if (last) Framebuffer::BindTarget(targetFBO, m_Width, m_Height);
-        else m_LDR[1]->Bind();
-        m_FXAAShader->Bind();
-        m_FXAAShader->SetInt("u_Source", 0);
-        m_FXAAShader->SetVec2("u_Texel", {1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight});
-        glBindTexture(GL_TEXTURE_2D, current->GetColorTexture());
-        FullscreenPass();
-        current = m_LDR[1].get();
+        ShaderTypes::Texel cb{Vec4(1.0f / (float)m_RenderWidth, 1.0f / (float)m_RenderHeight, 0, 0)};
+        m_Device->BeginPass(last ? RHI::RenderTargetHandle{} : m_LDR[1].RT);
+        m_Device->SetPipeline(m_P.FXAA);
+        m_Device->SetConstants(0, &cb, sizeof(cb));
+        m_Device->SetTexture(0, current->Color, RHI::Sampler::LinearClamp);
+        m_Device->Draw(3);
+        m_Device->EndPass();
+        current = &m_LDR[1];
     }
     if (upscale) {
-        if (sharpen) m_OutBuffer->Bind();
-        else Framebuffer::BindTarget(targetFBO, m_Width, m_Height);
-        m_UpscaleShader->Bind();
-        m_UpscaleShader->SetInt("u_Source", 0);
-        m_UpscaleShader->SetVec2("u_SrcSize", {(float)m_RenderWidth, (float)m_RenderHeight});
         // Supersampling (scale > 1) always uses the bilinear downsample.
         const bool down = m_RenderWidth > m_Width;
-        m_UpscaleShader->SetInt("u_Mode", down || gs.Upscaler == GraphicsSettings::UpscaleBilinear ? 0 : 1);
-        glBindTexture(GL_TEXTURE_2D, current->GetColorTexture());
-        FullscreenPass();
-        current = m_OutBuffer.get();
+        const float mode = down || gs.Upscaler == GraphicsSettings::UpscaleBilinear ? 0.0f : 1.0f;
+        ShaderTypes::Upscale cb{Vec4((float)m_RenderWidth, (float)m_RenderHeight, mode, 0)};
+        m_Device->BeginPass(sharpen ? m_Out.RT : RHI::RenderTargetHandle{});
+        m_Device->SetPipeline(m_P.Upscale);
+        m_Device->SetConstants(0, &cb, sizeof(cb));
+        m_Device->SetTexture(0, current->Color, RHI::Sampler::LinearClamp);
+        m_Device->Draw(3);
+        m_Device->EndPass();
+        current = &m_Out;
     }
     if (sharpen) {
-        Framebuffer::BindTarget(targetFBO, m_Width, m_Height);
-        m_SharpenShader->Bind();
-        m_SharpenShader->SetInt("u_Source", 0);
-        m_SharpenShader->SetFloat("u_Sharpness", gs.Sharpness);
-        m_SharpenShader->SetVec2("u_Texel", {1.0f / (float)current->GetSpec().Width, 1.0f / (float)current->GetSpec().Height});
-        glBindTexture(GL_TEXTURE_2D, current->GetColorTexture());
-        FullscreenPass();
+        ShaderTypes::Sharpen cb{Vec4(1.0f / (float)current->Width, 1.0f / (float)current->Height, gs.Sharpness, 0)};
+        m_Device->BeginPass({});
+        m_Device->SetPipeline(m_P.Sharpen);
+        m_Device->SetConstants(0, &cb, sizeof(cb));
+        m_Device->SetTexture(0, current->Color, RHI::Sampler::LinearClamp);
+        m_Device->Draw(3);
+        m_Device->EndPass();
     }
 
     m_PrevViewProj = viewProj;
     m_HasPrevFrame = true;
     m_Time += 1.0f / 60.0f;
     if (m_Time > 1000.0f) m_Time = 0.0f;
-    glEnable(GL_DEPTH_TEST);
-    VertexArray::Unbind();
-    Framebuffer::BindTarget(targetFBO, m_Width, m_Height);
 }
 
 // --- debug drawing ---------------------------------------------------------------
@@ -602,13 +619,9 @@ void Renderer::DrawAxes(const Mat4& t, float size) {
     DrawLine(o, t.TransformPoint({0, 0, size}), {0, 0, 1, 1});
 }
 
-std::vector<u8> Renderer::ReadPixels(u32 fbo) const {
-    std::vector<u8> pixels(size_t(m_Width) * m_Height * 4);
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, (GLsizei)m_Width, (GLsizei)m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return pixels;
+std::vector<u8> Renderer::ReadPixels(u32& width, u32& height) const {
+    if (!m_Device) { width = height = 0; return {}; }
+    return m_Device->ReadBackbuffer(width, height);
 }
 
 } // namespace Lapis

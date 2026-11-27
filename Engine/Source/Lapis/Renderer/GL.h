@@ -42,6 +42,8 @@ constexpr GLenum GL_BYTE = 0x1400, GL_UNSIGNED_BYTE = 0x1401, GL_SHORT = 0x1402,
 constexpr GLenum GL_NEVER = 0x0200, GL_LESS = 0x0201, GL_EQUAL = 0x0202, GL_LEQUAL = 0x0203, GL_GREATER = 0x0204,
                  GL_ALWAYS = 0x0207;
 constexpr GLenum GL_SRC_ALPHA = 0x0302, GL_ONE_MINUS_SRC_ALPHA = 0x0303;
+constexpr GLenum GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT = 0x8A34, GL_INVALID_INDEX = 0xFFFFFFFFu, GL_R32F = 0x822E,
+                 GL_TEXTURE_BASE_LEVEL = 0x813C, GL_TEXTURE_MAX_LEVEL = 0x813D;
 constexpr GLenum GL_FRONT = 0x0404, GL_BACK = 0x0405, GL_FRONT_AND_BACK = 0x0408, GL_CW = 0x0900, GL_CCW = 0x0901;
 constexpr GLenum GL_CULL_FACE = 0x0B44, GL_DEPTH_TEST = 0x0B71, GL_BLEND = 0x0BE2, GL_LINE_SMOOTH = 0x0B20,
                  GL_POLYGON_OFFSET_FILL = 0x8037, GL_MULTISAMPLE = 0x809D, GL_FRAMEBUFFER_SRGB = 0x8DB9,
@@ -165,7 +167,24 @@ constexpr GLenum GL_DEBUG_OUTPUT = 0x92E0, GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242,
     X(void, glRenderbufferStorage, (GLenum target, GLenum fmt, GLsizei w, GLsizei h))                  \
     X(void, glRenderbufferStorageMultisample, (GLenum target, GLsizei samples, GLenum fmt, GLsizei w, GLsizei h)) \
     X(void, glFramebufferRenderbuffer, (GLenum target, GLenum attach, GLenum rbtarget, GLuint rbo))   \
-    X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield mask, GLenum filter))
+    X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield mask, GLenum filter)) \
+    X(void, glGenSamplers, (GLsizei n, GLuint* samplers))                                              \
+    X(void, glDeleteSamplers, (GLsizei n, const GLuint* samplers))                                     \
+    X(void, glBindSampler, (GLuint unit, GLuint sampler))                                              \
+    X(void, glSamplerParameteri, (GLuint sampler, GLenum pname, GLint param))                          \
+    X(void, glSamplerParameterf, (GLuint sampler, GLenum pname, GLfloat param))                        \
+    X(void, glSamplerParameterfv, (GLuint sampler, GLenum pname, const GLfloat* params))               \
+    X(void, glBindVertexBuffer, (GLuint index, GLuint buffer, GLintptr offset, GLsizei stride))        \
+    X(void, glVertexAttribFormat, (GLuint index, GLint size, GLenum type, GLboolean normalized, GLuint offset)) \
+    X(void, glVertexAttribBinding, (GLuint attrib, GLuint binding))                                    \
+    X(void, glVertexBindingDivisor, (GLuint binding, GLuint divisor))                                  \
+    X(void, glBindBufferRange, (GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size)) \
+    X(GLuint, glGetUniformBlockIndex, (GLuint program, const GLchar* name))                            \
+    X(void, glUniformBlockBinding, (GLuint program, GLuint index, GLuint binding))                     \
+    X(void, glDrawArraysInstanced, (GLenum mode, GLint first, GLsizei count, GLsizei instances))       \
+    X(void, glDrawElementsInstancedBaseVertex, (GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei instances, GLint baseVertex)) \
+    X(void, glTexSubImage2D, (GLenum target, GLint level, GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, const void* data)) \
+    X(void, glBlendFuncSeparate, (GLenum srcRGB, GLenum dstRGB, GLenum srcA, GLenum dstA))
 
 // Optional (may be null on older drivers).
 #define LAPIS_GL_OPTIONAL_FUNCTIONS(X)                                                                 \

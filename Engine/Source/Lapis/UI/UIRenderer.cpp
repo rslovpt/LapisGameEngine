@@ -3,76 +3,12 @@
 #include <cstring>
 
 #include "Lapis/Core/Log.h"
-#include "Lapis/Renderer/Buffer.h"
-#include "Lapis/Renderer/GL.h"
-#include "Lapis/Renderer/Shader.h"
 #include "Lapis/UI/FontData.h"
 
 namespace Lapis {
 
 namespace {
     constexpr float FontPixels = 15.0f;   // UI units for text scale 1.0
-
-    const char* UIVertexSrc = R"(
-#version 330 core
-layout(location = 0) in vec2 a_Pos;
-layout(location = 1) in vec2 a_UV;
-layout(location = 2) in vec4 a_Color;
-layout(location = 3) in vec4 a_Rect;     // local x, y, width, height (pixels)
-layout(location = 4) in vec4 a_Params;   // radius, mode, param, unused
-uniform vec2 u_Screen;
-out vec2 v_UV;
-out vec4 v_Color;
-out vec4 v_Rect;
-out vec4 v_Params;
-void main() {
-    v_UV = a_UV;
-    v_Color = a_Color;
-    v_Rect = a_Rect;
-    v_Params = a_Params;
-    gl_Position = vec4(a_Pos.x / u_Screen.x * 2.0 - 1.0, 1.0 - a_Pos.y / u_Screen.y * 2.0, 0.0, 1.0);
-}
-)";
-    const char* UIFragmentSrc = R"(
-#version 330 core
-in vec2 v_UV;
-in vec4 v_Color;
-in vec4 v_Rect;
-in vec4 v_Params;
-uniform sampler2D u_Font;
-out vec4 o_Color;
-
-// Signed distance to a rounded box centered at the origin.
-float RoundedBox(vec2 p, vec2 halfSize, float r) {
-    vec2 q = abs(p) - halfSize + r;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-}
-
-void main() {
-    float mode = v_Params.y;
-    float alpha;
-    if (mode < 0.5) {
-        // SDF text: 0.5 = glyph edge. Smoothing width follows screen-space derivatives.
-        float d = texture(u_Font, v_UV).r;
-        float w = max(fwidth(d) * 0.75, 0.0001);
-        alpha = smoothstep(0.5 - w, 0.5 + w, d);
-    } else {
-        vec2 halfSize = v_Rect.zw * 0.5;
-        float r = min(v_Params.x, min(halfSize.x, halfSize.y));
-        float dist = RoundedBox(v_Rect.xy - halfSize, halfSize, r);
-        if (mode < 1.5) {
-            alpha = clamp(0.5 - dist, 0.0, 1.0);                                   // fill
-        } else if (mode < 2.5) {
-            float t = v_Params.z;                                                  // outline
-            alpha = clamp(0.5 - dist, 0.0, 1.0) * clamp(dist + t + 0.5, 0.0, 1.0);
-        } else {
-            float soft = max(v_Params.z, 0.001);                                   // shadow
-            alpha = 1.0 - smoothstep(-soft, soft, dist);
-        }
-    }
-    o_Color = vec4(v_Color.rgb, v_Color.a * alpha);
-}
-)";
 
     int Base64Value(char c) {
         if (c >= 'A' && c <= 'Z') return c - 'A';
@@ -87,9 +23,18 @@ void main() {
 UIRenderer::UIRenderer() = default;
 UIRenderer::~UIRenderer() { Shutdown(); }
 
-bool UIRenderer::Init() {
-    m_Shader = CreateScope<Shader>("UI", UIVertexSrc, UIFragmentSrc);
-    if (!m_Shader->IsValid()) return false;
+bool UIRenderer::Init(RHI::Device& device) {
+    m_Device = &device;
+    RHI::PipelineDesc pd;
+    pd.Shader = "UI";
+    pd.Name = "UI";
+    pd.Attributes = {{0, 0, RHI::AttribFormat::Float2, 0},  {1, 0, RHI::AttribFormat::Float2, 8}, {2, 0, RHI::AttribFormat::Float4, 16},
+                     {3, 0, RHI::AttribFormat::Float4, 32}, {4, 0, RHI::AttribFormat::Float4, 48}};
+    pd.Strides[0] = sizeof(UIVertex);
+    pd.Blend = RHI::BlendMode::Alpha;
+    pd.ColorFormat = RHI::Format::RGBA8;
+    m_Pipeline = device.CreatePipeline(pd);
+    if (!m_Pipeline) return false;
 
     // Decode the baked SDF atlas (base64).
     std::vector<u8> pixels;
@@ -107,28 +52,24 @@ bool UIRenderer::Init() {
     }
     pixels.resize(size_t(FontData::AtlasWidth) * FontData::AtlasHeight, 0);
 
-    glGenTextures(1, &m_FontTexture);
-    glBindTexture(GL_TEXTURE_2D, m_FontTexture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, FontData::AtlasWidth, FontData::AtlasHeight, 0, GL_RED, GL_UNSIGNED_BYTE, pixels.data());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_VBO = CreateRef<VertexBuffer>(nullptr, sizeof(UIVertex) * 6 * 1024, BufferUsage::Stream);
-    m_VAO = CreateScope<VertexArray>();
-    m_VAO->AddVertexBuffer(m_VBO, {{AttribType::Float2}, {AttribType::Float2}, {AttribType::Float4},
-                                   {AttribType::Float4}, {AttribType::Float4}});
+    RHI::TextureDesc td;
+    td.Width = FontData::AtlasWidth;
+    td.Height = FontData::AtlasHeight;
+    td.Fmt = RHI::Format::R8;
+    td.Data = pixels.data();
+    td.Name = "FontAtlas";
+    m_FontTexture = device.CreateTexture(td);
     return true;
 }
 
 void UIRenderer::Shutdown() {
-    if (m_FontTexture) { glDeleteTextures(1, &m_FontTexture); m_FontTexture = 0; }
-    m_Shader.reset();
-    m_VAO.reset();
-    m_VBO.reset();
+    if (m_Device) {
+        if (m_FontTexture) m_Device->Destroy(m_FontTexture);
+        if (m_Pipeline) m_Device->Destroy(m_Pipeline);
+    }
+    m_FontTexture = {};
+    m_Pipeline = {};
+    m_Device = nullptr;
 }
 
 void UIRenderer::Begin(u32 width, u32 height, float scale) {
@@ -229,26 +170,17 @@ float UIRenderer::LineHeight(float scale, int font) const {
     return FontData::LineHeight[Clamp(font, 0, FontData::FontCount - 1)] * scale * FontPixels / FontData::BaseSize;
 }
 
-void UIRenderer::End(u32 targetFBO) {
-    if (m_Vertices.empty() || !m_Shader) return;
-    glBindFramebuffer(GL_FRAMEBUFFER, targetFBO);
-    glViewport(0, 0, (GLsizei)m_Width, (GLsizei)m_Height);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    m_Shader->Bind();
-    m_Shader->SetVec2("u_Screen", Vec2((float)m_Width, (float)m_Height));
-    m_Shader->SetInt("u_Font", 0);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_FontTexture);
-    m_VBO->SetData(m_Vertices.data(), m_Vertices.size() * sizeof(UIVertex));
-    m_VAO->Bind();
-    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)m_Vertices.size());
-    VertexArray::Unbind();
-    glDisable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
+void UIRenderer::End(u32 /*targetFBO*/) {
+    if (m_Vertices.empty() || !m_Pipeline) return;
+    // Draws on top of the frame in the window (no clear).
+    m_Device->BeginPass({});
+    m_Device->SetPipeline(m_Pipeline);
+    const Vec4 screen((float)m_Width, (float)m_Height, 0.0f, 0.0f);
+    m_Device->SetConstants(0, &screen, sizeof(screen));
+    m_Device->SetTexture(0, m_FontTexture, RHI::Sampler::LinearClamp);
+    m_Device->SetVertexBuffer(0, m_Device->Transient(m_Vertices.data(), m_Vertices.size() * sizeof(UIVertex), sizeof(UIVertex)));
+    m_Device->Draw((u32)m_Vertices.size());
+    m_Device->EndPass();
 }
 
 } // namespace Lapis

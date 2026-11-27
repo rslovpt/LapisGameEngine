@@ -14,6 +14,7 @@
 // the exported game as its defaults).
 
 #include "Lapis/Core/Base.h"
+#include "Lapis/RHI/RHI.h"
 
 #include <iosfwd>
 #include <utility>
@@ -32,7 +33,7 @@ struct GPUInfo {
     bool        NVIDIA_RTX = false;   // RTX-class NVIDIA GPU (DLSS capable hardware)
     float       MaxAnisotropy = 1.0f;
 
-    static GPUInfo Detect();    // requires a current GL context
+    static GPUInfo FromDevice(const RHI::DeviceInfo& info);
     static const char* VendorString(GPUVendor v);
 };
 

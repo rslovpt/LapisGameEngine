@@ -1,7 +1,6 @@
 #include "Lapis/Renderer/Texture.h"
 
 #include "Lapis/Core/Log.h"
-#include "Lapis/Renderer/GL.h"
 
 namespace Lapis {
 
@@ -10,39 +9,22 @@ Texture2D::Texture2D(const Image& image, const TextureSpec& spec) : m_Width(imag
         LAPIS_ERROR("Texture2D: invalid image ({}x{}, {} bytes)", image.Width, image.Height, image.Pixels.size());
         return;
     }
-    glGenTextures(1, &m_ID);
-    glBindTexture(GL_TEXTURE_2D, m_ID);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, spec.SRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8, (GLsizei)image.Width, (GLsizei)image.Height,
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, image.Pixels.data());
-
-    GLint wrap = GL_REPEAT;
-    if (spec.Wrap == TextureWrap::Clamp) wrap = GL_CLAMP_TO_EDGE;
-    if (spec.Wrap == TextureWrap::Mirror) wrap = GL_MIRRORED_REPEAT;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
-
-    const bool mips = spec.Mipmaps && spec.Filter == TextureFilter::Trilinear;
-    GLint minF = GL_LINEAR, magF = GL_LINEAR;
-    if (spec.Filter == TextureFilter::Nearest) { minF = GL_NEAREST; magF = GL_NEAREST; }
-    if (mips) minF = GL_LINEAR_MIPMAP_LINEAR;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minF);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magF);
-    if (mips) {
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, 8.0f);
-        glGetError(); // anisotropy is an extension before GL 4.6; ignore if unsupported
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
+    RHI::Device* device = RHI::Current();
+    if (!device) { LAPIS_ERROR("Texture2D: no graphics device"); return; }
+    RHI::TextureDesc desc;
+    desc.Width = image.Width;
+    desc.Height = image.Height;
+    desc.Fmt = spec.SRGB ? RHI::Format::RGBA8_SRGB : RHI::Format::RGBA8;
+    desc.Mipmaps = spec.Mipmaps && spec.Filter == TextureFilter::Trilinear;
+    desc.Data = image.Pixels.data();
+    desc.Name = "Texture2D";
+    m_Handle = device->CreateTexture(desc);
+    if (spec.Filter == TextureFilter::Nearest) m_Sampler = RHI::Sampler::PointClamp;
+    else if (!desc.Mipmaps) m_Sampler = spec.Wrap == TextureWrap::Clamp ? RHI::Sampler::LinearClamp : RHI::Sampler::LinearWrap;
 }
 
 Texture2D::~Texture2D() {
-    if (m_ID) glDeleteTextures(1, &m_ID);
-}
-
-void Texture2D::Bind(u32 slot) const {
-    glActiveTexture(GL_TEXTURE0 + slot);
-    glBindTexture(GL_TEXTURE_2D, m_ID);
+    if (m_Handle) if (RHI::Device* device = RHI::Current()) device->Destroy(m_Handle);
 }
 
 namespace {

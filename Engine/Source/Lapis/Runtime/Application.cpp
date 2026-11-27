@@ -43,17 +43,51 @@ bool Application::Init() {
 
     JobSystem::Init(m_Spec.WorkerThreads);
 
-    m_Window = Window::Create(m_Spec.Window);
-    if (!m_Window) { LAPIS_FATAL("Failed to create the window / OpenGL context"); return false; }
-    m_Window->SetEventCallback([this](Event& e) { HandleEvent(e); });
+    if (!CreateWindowAndDevice()) return false;
+    RHI::SetCurrent(m_Device.get());
 
-    if (!m_Renderer.Init(m_Window->GetWidth(), m_Window->GetHeight(), m_Spec.MSAASamples)) {
+    if (!m_Renderer.Init(*m_Device, m_Window->GetWidth(), m_Window->GetHeight(), m_Spec.MSAASamples)) {
         LAPIS_FATAL("Failed to initialize the renderer");
         return false;
     }
-    if (!m_UIRenderer.Init()) { LAPIS_FATAL("Failed to initialize the UI renderer"); return false; }
+    if (!m_UIRenderer.Init(*m_Device)) { LAPIS_FATAL("Failed to initialize the UI renderer"); return false; }
     m_UI = CreateScope<UIContext>(m_UIRenderer);
     return true;
+}
+
+// Creates the window for the requested graphics API and its device. If that
+// API can't start and fallback is allowed, retries with OpenGL.
+bool Application::CreateWindowAndDevice() {
+    RHI::API api = m_Spec.GraphicsAPI;
+    if (!RHI::Device::IsCompiledIn(api)) {
+        m_APIFallbackReason = std::string(RHI::APIName(api)) + " is not available on this platform";
+        api = RHI::API::OpenGL;
+    }
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        WindowProps props = m_Spec.Window;
+        props.OpenGLContext = api == RHI::API::OpenGL;
+        m_Window = Window::Create(props);
+        if (!m_Window) {
+            LAPIS_FATAL("Failed to create the window{}", props.OpenGLContext ? " / OpenGL context" : "");
+            return false;
+        }
+        m_Window->SetEventCallback([this](Event& e) { HandleEvent(e); });
+        std::string error;
+        m_Device = RHI::Device::Create(api, *m_Window, &error);
+        if (m_Device) {
+            m_Device->SetVSync(m_Spec.Window.VSync);
+            if (!m_APIFallbackReason.empty()) LAPIS_WARN("Using {} instead: {}", RHI::APIName(api), m_APIFallbackReason);
+            return true;
+        }
+        if (api == RHI::API::OpenGL || !m_Spec.AllowAPIFallback) {
+            LAPIS_FATAL("Graphics: {} could not start: {}", RHI::APIName(api), error);
+            return false;
+        }
+        m_APIFallbackReason = std::string(RHI::APIName(api)) + " could not start: " + error;
+        m_Window.reset();
+        api = RHI::API::OpenGL;
+    }
+    return false;
 }
 
 void Application::Shutdown() {
@@ -63,6 +97,8 @@ void Application::Shutdown() {
     m_UI.reset();
     m_UIRenderer.Shutdown();
     m_Renderer.Shutdown();
+    RHI::SetCurrent(nullptr);
+    m_Device.reset();         // the device needs the window (swap chain / context)
     m_Window.reset();
     JobSystem::Shutdown();
     LAPIS_INFO("Lapis Engine shut down (exit code {})", m_ExitCode);
@@ -99,7 +135,7 @@ int Application::Run() {
         if (!m_Running) break;
 
         // Headless/automated runs use a fixed frame time for determinism.
-        float dt = m_Window->IsHeadless() ? m_Spec.FixedTimestep : (float)frameTimer.Elapsed();
+        float dt = m_Window->IsHeadless() || m_Spec.FixedFrameTime ? m_Spec.FixedTimestep : (float)frameTimer.Elapsed();
         frameTimer.Reset();
         dt = std::min(dt, 0.25f);
 
@@ -190,6 +226,7 @@ void Application::Frame(float dt) {
 
     if (m_Minimized) { if (m_Scene) { m_Scene->TakeHud(); m_Scene->Perf = perf; } return; }
     phase.Reset();
+    m_Device->BeginFrame(m_Window->GetWidth(), m_Window->GetHeight());
     const float aspect = m_Window->GetAspect();
     if (m_Scene) {
         m_Scene->OnRender(m_Renderer, aspect, GetCameraOverride(), m_Accumulator / m_Spec.FixedTimestep);
@@ -201,7 +238,7 @@ void Application::Frame(float dt) {
         m_Renderer.BeginFrame(view);
     }
     OnRender();
-    m_Renderer.EndFrame(m_Window->GetBackbufferFBO());
+    m_Renderer.EndFrame();
 
     m_UI->BeginFrame(m_Window->GetWidth(), m_Window->GetHeight(), GetUIScale());
     if (m_Scene) {
@@ -211,8 +248,8 @@ void Application::Frame(float dt) {
         }
     }
     OnUI(*m_UI);
-    m_UI->EndFrame(m_Window->GetBackbufferFBO());
-    m_Window->SwapBuffers();
+    m_UI->EndFrame(0);
+    m_Device->EndFrame();   // submit + present
 
     perf.RenderMs = (float)phase.ElapsedMillis();
     perf.DrawCalls = m_Renderer.GetStats().DrawCalls;
@@ -223,7 +260,7 @@ void Application::Frame(float dt) {
 void Application::ApplyGraphicsSettings(const GraphicsSettings& settings) {
     m_Graphics = settings;
     m_Renderer.ApplySettings(settings);
-    m_Window->SetVSync(settings.VSync);
+    m_Device->SetVSync(settings.VSync);
     m_Spec.MaxFPS = settings.MaxFPS();
     m_Window->SetFullscreen(settings.Fullscreen);
 }
@@ -237,8 +274,9 @@ void Application::ApplyProjectSettings(const Project& project) {
 
 bool Application::SaveScreenshot(const std::string& path) {
     if (!m_Window) return false;
-    auto pixels = m_Renderer.ReadPixels(m_Window->GetBackbufferFBO());
-    const bool ok = ImageLoader::WriteBMP(path, m_Window->GetWidth(), m_Window->GetHeight(), pixels);
+    u32 w = 0, h = 0;
+    auto pixels = m_Renderer.ReadPixels(w, h);
+    const bool ok = !pixels.empty() && ImageLoader::WriteBMP(path, w, h, pixels);
     if (ok) LAPIS_INFO("Screenshot saved: {}", path);
     else LAPIS_ERROR("Screenshot failed: {}", path);
     return ok;

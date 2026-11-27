@@ -9,6 +9,7 @@ if(WIN32)
     list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/Platform/(Linux|Headless)/.*")
 else()
     list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/Platform/Win32/.*")
+    list(FILTER LAPIS_ENGINE_SOURCES EXCLUDE REGEX ".*/RHI/D3D12/.*")
 endif()
 
 add_library(LapisEngine STATIC ${LAPIS_ENGINE_SOURCES})

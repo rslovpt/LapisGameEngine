@@ -13,6 +13,7 @@
 #include "Lapis/Core/Event.h"
 #include "Lapis/Core/Time.h"
 #include "Lapis/Platform/Window.h"
+#include "Lapis/RHI/RHI.h"
 #include "Lapis/Renderer/Renderer.h"
 #include "Lapis/Scene/Scene.h"
 #include "Lapis/UI/UIContext.h"
@@ -24,9 +25,12 @@ struct ApplicationSpec {
     WindowProps Window;
     std::string LogFile;               // empty = no log file
     u32   MSAASamples = 4;
+    RHI::API GraphicsAPI = RHI::API::OpenGL;  // requested graphics backend
+    bool  AllowAPIFallback = true;            // fall back to OpenGL if it can't start
     u32   WorkerThreads = 0;           // job system workers (0 = automatic)
     float FixedTimestep = 1.0f / 60.0f;
     bool  ShowStatsInTitle = true;
+    bool  FixedFrameTime = false;      // every frame advances exactly FixedTimestep (deterministic tests)
     u64   MaxFrames = 0;               // >0: quit automatically after N frames (automated tests)
     std::string ScreenshotOnExit;      // write the last frame as BMP before quitting
     bool  AutoStartScene = true;       // false: the scene is only rendered until started (editor)
@@ -55,6 +59,9 @@ public:
     // Project: multithreading options + its game graphics settings.
     void ApplyProjectSettings(const struct Project& project);
     const GraphicsSettings& GetGraphicsSettings() const { return m_Graphics; }
+    RHI::Device& GetDevice() { return *m_Device; }
+    // Why the requested graphics API was not used (empty if it was).
+    const std::string& GetAPIFallbackReason() const { return m_APIFallbackReason; }
 
     // Called when a script calls Graphics.Apply(). Default: apply as-is.
     // The editor overrides this so play-mode changes never go fullscreen or
@@ -93,6 +100,7 @@ protected:
     ApplicationSpec m_Spec;
 
 private:
+    bool CreateWindowAndDevice();
     bool Init();
     void Shutdown();
     void HandleEvent(Event& e);
@@ -108,6 +116,8 @@ private:
     bool m_Minimized = false;
     int  m_ExitCode = 0;
     float m_Accumulator = 0.0f;
+    Scope<RHI::Device> m_Device;
+    std::string m_APIFallbackReason;
     GraphicsSettings m_Graphics;          // last requested (unresolved) settings
     GraphicsSettings m_GraphicsDefaults;  // project defaults (Graphics.Reset)
 

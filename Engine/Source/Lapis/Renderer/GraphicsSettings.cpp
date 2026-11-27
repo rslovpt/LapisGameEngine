@@ -2,7 +2,6 @@
 
 #include "Lapis/Core/Log.h"
 #include "Lapis/Math/Math.h"
-#include "Lapis/Renderer/GL.h"
 
 #include <algorithm>
 #include <cctype>
@@ -36,15 +35,12 @@ const char* GPUInfo::VendorString(GPUVendor v) {
     }
 }
 
-GPUInfo GPUInfo::Detect() {
+GPUInfo GPUInfo::FromDevice(const RHI::DeviceInfo& d) {
     GPUInfo info;
-    auto str = [](GLenum e) {
-        const GLubyte* s = glGetString(e);
-        return s ? std::string(reinterpret_cast<const char*>(s)) : std::string();
-    };
-    info.VendorName = str(GL_VENDOR);
-    info.Name = str(GL_RENDERER);
-    info.APIVersion = str(GL_VERSION);
+    info.VendorName = d.Vendor;
+    info.Name = d.GPUName;
+    info.APIVersion = d.Version;
+    info.MaxAnisotropy = d.MaxAnisotropy;
     const std::string v = Lower(info.VendorName + " " + info.Name);
     if (Contains(v, "llvmpipe") || Contains(v, "softpipe") || Contains(v, "swiftshader") || Contains(v, "microsoft basic"))
         info.Vendor = GPUVendor::Software;
@@ -54,11 +50,6 @@ GPUInfo GPUInfo::Detect() {
     else if (Contains(v, "apple")) info.Vendor = GPUVendor::Apple;
     // RTX 20xx and newer, plus RTX professional cards ("RTX A4000", "RTX 6000 Ada").
     info.NVIDIA_RTX = info.Vendor == GPUVendor::NVIDIA && Contains(Lower(info.Name), "rtx");
-
-    GLfloat aniso = 1.0f;
-    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &aniso);
-    while (glGetError() != GL_NO_ERROR) {} // not supported -> stays 1
-    info.MaxAnisotropy = std::max(1.0f, (float)aniso);
     return info;
 }
 

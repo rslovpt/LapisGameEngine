@@ -1,6 +1,5 @@
 #include "Lapis/Renderer/Mesh.h"
 
-#include "Lapis/Renderer/GL.h"
 
 namespace Lapis {
 
@@ -26,29 +25,32 @@ void MeshData::RecalculateNormals() {
 // --- Mesh ----------------------------------------------------------------------
 Mesh::Mesh(const MeshData& data, const std::string& name)
     : m_IndexCount((u32)data.Indices.size()), m_Bounds(data.ComputeBounds()), m_Name(name) {
-    m_VAO = CreateScope<VertexArray>();
-    auto vb = CreateRef<VertexBuffer>(data.Vertices.data(), data.Vertices.size() * sizeof(Vertex));
-    m_VAO->AddVertexBuffer(vb, {{AttribType::Float3}, {AttribType::Float3}, {AttribType::Float2}});
-    m_VAO->SetIndexBuffer(CreateRef<IndexBuffer>(data.Indices.data(), m_IndexCount));
+    RHI::Device* device = RHI::Current();
+    if (!device || data.Vertices.empty() || data.Indices.empty()) return;
+    RHI::BufferDesc vb;
+    vb.Type = RHI::BufferType::Vertex;
+    vb.Size = data.Vertices.size() * sizeof(Vertex);
+    vb.Data = data.Vertices.data();
+    vb.Name = "MeshVertices";
+    m_VertexBuffer = device->CreateBuffer(vb);
+    RHI::BufferDesc ib;
+    ib.Type = RHI::BufferType::Index;
+    ib.Size = data.Indices.size() * sizeof(u32);
+    ib.Data = data.Indices.data();
+    ib.Name = "MeshIndices";
+    m_IndexBuffer = device->CreateBuffer(ib);
 }
 
-void Mesh::DrawInstanced(u32 instanceBuffer, size_t offset, u32 count) const {
-    m_VAO->Bind();
-    glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);
-    // Per instance: mat4 model (locations 3-6) + vec4 tint (location 7).
-    constexpr GLsizei stride = sizeof(Mat4) + sizeof(Vec4);
-    for (GLuint i = 0; i < 5; ++i) {
-        const GLuint loc = 3 + i;
-        glEnableVertexAttribArray(loc);
-        glVertexAttribPointer(loc, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(offset + i * sizeof(Vec4)));
-        glVertexAttribDivisor(loc, 1);
+Mesh::~Mesh() {
+    if (RHI::Device* device = RHI::Current()) {
+        if (m_VertexBuffer) device->Destroy(m_VertexBuffer);
+        if (m_IndexBuffer) device->Destroy(m_IndexBuffer);
     }
-    glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)m_IndexCount, GL_UNSIGNED_INT, nullptr, (GLsizei)count);
 }
 
-void Mesh::Draw() const {
-    m_VAO->Bind();
-    glDrawElements(GL_TRIANGLES, (GLsizei)m_IndexCount, GL_UNSIGNED_INT, nullptr);
+void Mesh::Bind(RHI::Device& device) const {
+    device.SetVertexBuffer(0, {m_VertexBuffer, 0, (u32)sizeof(Vertex)});
+    device.SetIndexBuffer({m_IndexBuffer, 0, 0});
 }
 
 // --- MeshFactory ---------------------------------------------------------------
