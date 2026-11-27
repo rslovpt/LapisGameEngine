@@ -22,6 +22,7 @@
 #include "TestFramework.h"
 
 #include "Lapis/Lapis.h"
+#include "Lapis/Scripting/Python/PythonScripting.h"
 
 #if defined(__linux__)
     #include <sys/utsname.h>
@@ -329,6 +330,17 @@ int main(int argc, char** argv) {
         Entity ball = scene.FindEntityByName("ScriptBall");
         R.Check("Ball fell and came to rest on the ground", ball && std::fabs(ball.Transform().Position.y - 0.5f) < 0.05f,
                 ball ? Format("y = {}", ball.Transform().Position.y) : "missing");
+
+        // Python (optional).
+        R.Section("Python scripting (optional)");
+        if (Python::Initialize()) {
+            R.Check("Python found", true, Python::Status());
+            std::string pyError;
+            const bool pyOk = Python::RunString("import lapis\nv = lapis.Vector3(1, 2, 2)\nassert abs(v.length() - 3) < 1e-6\n", &pyError);
+            R.Check("Python runs engine code (lapis module)", pyOk, pyError);
+        } else {
+            R.Warn("Python", Python::Status() + " - only needed for .py scripts");
+        }
 
         // Performance.
         R.Section("Performance");

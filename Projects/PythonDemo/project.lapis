@@ -1,0 +1,5 @@
+# Lapis project - Python scripting example (needs Python 3.8+ installed)
+Name=PythonDemo
+StartupScene=Scenes/Main.scene
+Width=1280
+Height=720

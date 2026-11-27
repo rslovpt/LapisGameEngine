@@ -167,12 +167,17 @@ PHASE 8b - Luau scripting (embedded, like Roblox/Unreal Blueprints-as-code)
 PHASE 8b2 - Python scripting alongside Luau (before the next play session)
 ------------------------------------------------------------------------------
 Luau stays the default language; Python is an optional second language.
-[ ] Scripting-language abstraction: scripts pick a backend by extension
-    (.luau -> Luau, .py -> Python); same component/lifecycle/API surface
-[ ] Python backend loaded at runtime (no build dependency): PyPy (JIT) when
-    available, CPython as fallback; engine API exposed as a `lapis` module
-    (Entity, Scene, Input, Physics, HUD, File, Perf, Time, App)
-[ ] Editor: create/open .py scripts, errors in the log, hot reload
+[x] Scripts pick a backend by extension (.luau -> Luau, .py -> Python);
+    same component and lifecycle (on_start / on_update / on_collision /
+    on_destroy)
+[x] CPython backend loaded at runtime (no build dependency, auto-detected);
+    `lapis` module: Vector3, Color, Entity, find, spawn, input, time, HUD,
+    raycast; print -> log; tracebacks reported, never crash; hot reload
+[ ] `lapis` module: File, Perf, App, Graphics, Physics overlap (Luau parity)
+[ ] PyPy (JIT): PyPy can't be embedded via the CPython C API - use CFFI
+    embedding (generated at Python setup time), then prefer it over CPython
+[x] Editor: File > New Python Script, Python status in File > Settings,
+    errors in the log, hot reload; example project Projects/PythonDemo
 [ ] Packager: bundle the Python runtime with exported games that use Python
 [ ] Stress test: Scripting test in Python vs Luau
 [ ] Python setup inside the editor (no web browser needed): auto-detect

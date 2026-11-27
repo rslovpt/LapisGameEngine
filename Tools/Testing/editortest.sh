@@ -27,7 +27,7 @@ X="python3 $HERE/xinput.py"
 shot() { import -window root "$OUT/$1.png" 2>/dev/null; }
 
 shot 01_editor_sandbox
-$X move 25 13 , click 1 , sleep 0.8 , move 80 151 , sleep 0.8 , move 300 151 , sleep 0.8
+$X move 25 13 , click 1 , sleep 0.8 , move 80 176 , sleep 0.8 , move 300 176 , sleep 0.8
 shot 02_file_templates_menu
 $X click 1 , sleep 3
 shot 03_template_created
@@ -39,8 +39,8 @@ $X tap Escape , sleep 0.5 , tap Escape , sleep 1.5
 shot 06_stopped
 $X move 25 13 , click 1 , sleep 0.8
 shot 07_file_menu
-# File > Export Game...  (items: New, Open, Save, New Script, sep, Templates, sep, Settings, Viewport Quality, Export)
-$X move 80 233 , sleep 0.5 , click 1 , sleep 4
+# File > Export Game...  (items: New, Open, Save, New Script, New Python Script, sep, Templates, sep, Settings, Viewport Quality, Export)
+$X move 80 258 , sleep 0.5 , click 1 , sleep 4
 shot 08_exported
 $X tap Enter , sleep 0.5 , key Alt 0.1
 kill $ED 2>/dev/null; wait $ED 2>/dev/null

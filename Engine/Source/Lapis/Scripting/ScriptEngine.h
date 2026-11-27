@@ -29,6 +29,11 @@
 struct lua_State;
 
 namespace Lapis {
+// Key name -> Key value as used by Input.* in scripts ("W", "Space", "F1"...); -1 if unknown.
+int ScriptKeyFromName(const std::string& name);
+}
+
+namespace Lapis {
 
 class Scene;
 

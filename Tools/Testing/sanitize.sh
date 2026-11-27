@@ -11,6 +11,9 @@ OUT=${2:-/tmp/lapis_sanitize}
 rm -rf "$OUT"; mkdir -p "$OUT"
 cmake -S "$ROOT" -B "$BUILD" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLAPIS_SANITIZE=ON >/dev/null || exit 1
 cmake --build "$BUILD" -j"$(nproc)" >"$OUT/build.txt" 2>&1 || { echo "FAIL: build (see $OUT/build.txt)"; exit 1; }
+# The embedded CPython keeps interned objects until process exit by design.
+printf "leak:libpython\n" > "$OUT/lsan.supp"
+export LSAN_OPTIONS=suppressions=$OUT/lsan.supp:print_suppressions=0
 export ASAN_OPTIONS=detect_leaks=1:log_path=$OUT/asan
 export UBSAN_OPTIONS=print_stacktrace=1:log_path=$OUT/asan
 fail=0

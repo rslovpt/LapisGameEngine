@@ -25,6 +25,7 @@
 #include "Lapis/Runtime/EntryPoint.h"
 #include "Lapis/Runtime/Packager.h"
 #include "Lapis/UI/CodeEditor.h"
+#include "Lapis/Scripting/Python/PythonScripting.h"
 
 #include "luacode.h"
 
@@ -228,7 +229,7 @@ protected:
             const float right = (m_Settings.ShowInspector && !m_Playing) ? 308.0f : 8.0f;
             m_Code.Draw(ui, GetWindow(), left, top + 8, w - left - right, h - top - bottom - 16);
         }
-        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 400);
+        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 230, top + 30, 460, 460);
         const float gw = std::min(640.0f, w - 40), gh = std::min(600.0f, h - top - 60);
         if (m_ShowViewportQuality) DrawViewportQuality(ui, w * 0.5f - gw * 0.5f, top + 30, gw, gh);
         if (m_ShowGraphics) DrawGraphicsSettings(ui, w * 0.5f - gw * 0.5f, top + 30, gw, gh);
@@ -261,6 +262,7 @@ private:
             }
             if (ui.MenuItem("Save Scene", "Ctrl+S", false, !m_Playing && !m_Project.Directory.empty())) SaveScene();
             if (ui.MenuItem("New Script...", "", false, !m_Project.Directory.empty())) NewScript();
+            if (ui.MenuItem("New Python Script...", "", false, !m_Project.Directory.empty())) NewScript(true);
             ui.MenuSeparator();
             if (ui.BeginMenu("Templates")) {
                 if (ui.MenuItem("First Person Character")) CreateFromTemplate("FirstPerson");
@@ -406,7 +408,7 @@ private:
         if (e.Has<LightComponent>()) ui.Label("  Light");
         if (e.Has<CameraComponent>()) ui.Label("  Camera");
         if (auto* sc = e.TryGet<LuauScriptComponent>()) {
-            ui.Label("  Luau Script: " + sc->ScriptPath);
+            ui.Label(std::string(Python::IsPythonScript(sc->ScriptPath) ? "  Python Script: " : "  Luau Script: ") + sc->ScriptPath);
             if (ui.Button("Edit script")) OpenScript(sc->ScriptPath);
             ui.SameLine();
             if (ui.Button("Edit in VS Code")) LapisApp::OpenInVSCode(m_Project.Path(sc->ScriptPath));
@@ -594,6 +596,11 @@ private:
                 m_Settings.Save();
             }
             if (RHI::ResolveAPIChoice(m_Settings.GraphicsAPI) != info.Api) ui.Label("Restart the editor to switch the graphics API.", &ui.Style.Accent);
+        }
+        ui.Label(std::string("Python: ") + (Python::IsAvailable() ? Python::Status() : "not loaded"), &ui.Style.TextDim);
+        if (!Python::IsAvailable() && ui.Button("Detect Python", 150)) {
+            Python::Initialize();
+            if (!Python::IsAvailable()) GetUI().OpenMessage("Python", Python::Status());
         }
         ui.Spacing(6);
         if (ui.Button("Editor viewport quality...", 220)) { m_ShowViewportQuality = true; m_ShowSettings = false; }
@@ -1041,13 +1048,29 @@ private:
         if (m_Code.Open(m_Project.Path(relative), fs::path(relative).filename().string())) m_ShowCode = true;
     }
 
-    void NewScript() {
+    void NewScript(bool python = false) {
         const fs::path dir = fs::path(m_Project.Directory) / "Scripts";
         std::error_code ec;
         fs::create_directories(dir, ec);
-        fs::path file = dir / "NewScript.luau";
-        for (int i = 2; fs::exists(file); ++i) file = dir / ("NewScript" + std::to_string(i) + ".luau");
+        const std::string ext = python ? ".py" : ".luau";
+        const std::string base = python ? "NewPythonScript" : "NewScript";
+        fs::path file = dir / (base + ext);
+        for (int i = 2; fs::exists(file); ++i) file = dir / (base + std::to_string(i) + ext);
         const std::string name = file.stem().string();
+        if (python) {
+            FileSystem::WriteText(file.string(),
+                "# " + name + ".py - Python script (Luau is the main scripting language; Python needs Python 3.8+ installed)\n"
+                "# Attach it to an entity in the Inspector. Docs: Docs/Scripting.md (Python section).\n"
+                "from lapis import *\n\n\n"
+                "class " + name + "(Script):\n"
+                "    speed = 90.0\n\n"
+                "    def on_start(self):\n"
+                "        print(\"Hello from\", self.entity.name)\n\n"
+                "    def on_update(self, dt):\n"
+                "        r = self.entity.rotation\n"
+                "        self.entity.rotation = Vector3(r.x, r.y + self.speed * dt, r.z)\n");
+            if (!Python::Initialize()) GetUI().OpenMessage("Python", Python::Status());
+        } else
         FileSystem::WriteText(file.string(),
             "-- " + name + ".luau\n"
             "-- Attach this script to an entity (Inspector) or spawn with Script = \"Scripts/" + file.filename().string() + "\".\n"

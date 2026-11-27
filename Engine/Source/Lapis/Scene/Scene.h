@@ -14,6 +14,7 @@
 namespace Lapis {
 
 class ScriptEngine;
+namespace Python { class Host; }
 class AssetManager;
 
 class Scene : NonCopyable {
@@ -105,6 +106,9 @@ private:
     std::string  m_DefaultSave;
     PhysicsWorld m_Physics;
     Scope<ScriptEngine> m_Scripts;
+    Scope<Python::Host> m_Python;      // only created when a .py script exists
+    Python::Host& GetPython();
+    void StartPythonScripts();
     Scope<AssetManager> m_Assets;
     std::vector<EntityID> m_DestroyQueue;
     std::vector<DebugLineCmd> m_DebugLines;

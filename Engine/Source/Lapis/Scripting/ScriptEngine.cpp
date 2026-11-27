@@ -1,4 +1,5 @@
 #include "Lapis/Scripting/ScriptEngine.h"
+#include "Lapis/Scripting/Python/PythonScripting.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -869,7 +870,7 @@ bool ScriptEngine::CallMethod(int instanceRef, const char* method, int nargs, En
 
 void ScriptEngine::StartEntity(EntityID id) {
     auto* sc = m_Scene->GetRegistry().TryGet<LuauScriptComponent>(id);
-    if (!sc || sc->Started) return;
+    if (!sc || sc->Started || Python::IsPythonScript(sc->ScriptPath)) return;   // .py -> Python host
     sc->Started = true;
 
     const int module = LoadModule(sc->ScriptPath);
@@ -921,5 +922,7 @@ void ScriptEngine::DestroyEntity(EntityID id) {
     lua_unref(m_L, ref);
     if (auto* again = m_Scene->GetRegistry().TryGet<LuauScriptComponent>(id)) again->InstanceRef = -1;
 }
+
+int ScriptKeyFromName(const std::string& name) { return KeyFromName(name); }
 
 } // namespace Lapis

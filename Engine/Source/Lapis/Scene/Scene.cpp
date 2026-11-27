@@ -1,4 +1,5 @@
 #include "Lapis/Scene/Scene.h"
+#include "Lapis/Scripting/Python/PythonScripting.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -14,8 +15,23 @@ Scene::Scene(const std::string& name) : m_Name(name) {}
 
 Scene::~Scene() {
     if (m_Running) OnStop();
-    // Scripts hold Lua refs to entities; tear them down before the registry.
+    // Scripts hold Lua/Python refs to entities; tear them down before the registry.
+    m_Python.reset();
     m_Scripts.reset();
+}
+
+Python::Host& Scene::GetPython() {
+    if (!m_Python) m_Python = CreateScope<Python::Host>(*this);
+    return *m_Python;
+}
+
+// Starts every .py script component that isn't running yet (also new spawns).
+void Scene::StartPythonScripts() {
+    std::vector<EntityID> pending;
+    registry.Each<LuauScriptComponent>([&](EntityID id, LuauScriptComponent& sc) {
+        if (!sc.Started && !sc.Failed && Python::IsPythonScript(sc.ScriptPath)) pending.push_back(id);
+    });
+    for (EntityID id : pending) GetPython().StartEntity(id);
 }
 
 ScriptEngine& Scene::GetScripts() {
@@ -59,6 +75,7 @@ void Scene::DestroyRecursive(EntityID id) {
         instance->OnDestroy();
     }
     if (m_Scripts && registry.Has<LuauScriptComponent>(id)) m_Scripts->DestroyEntity(id);
+    if (m_Python) m_Python->DestroyEntity(id);
     registry.Destroy(id);
 }
 
@@ -137,6 +154,7 @@ void Scene::OnStart() {
     if (registry.Count<LuauScriptComponent>() > 0) {
         GetScripts();
         registry.Each<LuauScriptComponent>([&](EntityID id, LuauScriptComponent&) { m_Scripts->StartEntity(id); });
+        StartPythonScripts();
     }
     FlushDestroyQueue();
 }
@@ -156,7 +174,11 @@ void Scene::OnUpdate(float dt) {
         if (live && live->Instance) { auto keep = live->Instance; keep->OnUpdate(dt); }
     });
 
-    if (registry.Count<LuauScriptComponent>() > 0) GetScripts().UpdateEntities(dt);
+    if (registry.Count<LuauScriptComponent>() > 0) {
+        GetScripts().UpdateEntities(dt);
+        StartPythonScripts();
+        if (m_Python) m_Python->UpdateEntities(dt);
+    }
 
     FlushDestroyQueue();
     UpdateTransforms();
@@ -173,6 +195,7 @@ void Scene::OnFixedUpdate(float dt) {
         for (const CollisionEvent& ev : m_Physics.GetBeginEvents()) {
             m_Scripts->DispatchCollision(ev.A, ev.B);
             m_Scripts->DispatchCollision(ev.B, ev.A);
+            if (m_Python) { m_Python->DispatchCollision(ev.A, ev.B); m_Python->DispatchCollision(ev.B, ev.A); }
         }
     }
     FlushDestroyQueue();
@@ -186,6 +209,7 @@ void Scene::OnStop() {
     if (m_Scripts) {
         registry.Each<LuauScriptComponent>([&](EntityID id, LuauScriptComponent&) { m_Scripts->DestroyEntity(id); });
     }
+    if (m_Python) m_Python->DestroyAll();
     m_Running = false;
 }
 
