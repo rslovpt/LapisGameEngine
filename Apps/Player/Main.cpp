@@ -34,7 +34,7 @@ protected:
                 LAPIS_ERROR("Startup scene '{}' failed to load - starting with an empty scene", m_Project.StartupScene);
         }
         SetScene(scene);
-        ApplyGraphicsSettings(m_Project);
+        ApplyProjectSettings(m_Project);
         if (!m_Project.MainScript.empty()) scene->GetScripts().RunFile(m_Project.MainScript);
         return true;
     }
@@ -83,8 +83,9 @@ Application* Lapis::CreateApplication(int argc, char** argv) {
     spec.Window.Title = project->Name;
     spec.Window.Width = (u32)std::stoul(args.Value("--width", std::to_string(project->Width)));
     spec.Window.Height = (u32)std::stoul(args.Value("--height", std::to_string(project->Height)));
-    spec.Window.VSync = project->VSync && !args.Has("--novsync");
-    spec.MSAASamples = project->MSAA;
+    spec.Window.VSync = project->Graphics.VSync && !args.Has("--novsync");
+    spec.MSAASamples = project->Graphics.MSAASamples();
+    spec.WorkerThreads = project->WorkerThreads;
     spec.LogFile = (std::filesystem::path(LapisApp::ExeDir()) / "Logs" / (project->Name + ".log")).string();
     spec.MaxFrames = std::stoull(args.Value("--frames", "0"));
     spec.ScreenshotOnExit = args.Value("--screenshot");

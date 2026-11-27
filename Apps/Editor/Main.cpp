@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
+#include <cmath>
 #include <mutex>
 #include <thread>
 #include <filesystem>
@@ -34,7 +36,10 @@ namespace {
 // --- persistent editor settings (LapisEditor.ini next to the exe) -------------
 struct EditorSettings {
     std::string LastProject;
-    bool VSync = true;
+    // Editor viewport quality: editor only, never exported. Defaults to a
+    // lighter "Medium" so the editor stays responsive.
+    GraphicsSettings Viewport = DefaultViewport();
+    bool PreviewGameGraphics = false;  // render the viewport with the project's game settings
     bool ShowStats = true;
     bool ShowHierarchy = true;
     bool ShowInspector = true;
@@ -51,7 +56,15 @@ struct EditorSettings {
             if (eq == std::string::npos) continue;
             const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
             if (k == "LastProject") LastProject = v;
-            else if (k == "VSync") VSync = v == "1";
+            else if (k.rfind("Viewport.", 0) == 0) {
+                std::string value = v;
+                const size_t hash = value.find('#');
+                if (hash != std::string::npos) value = value.substr(0, hash);
+                while (!value.empty() && std::isspace((unsigned char)value.back())) value.pop_back();
+                Viewport.Set(k.substr(9), value);
+            }
+            else if (k == "PreviewGameGraphics") PreviewGameGraphics = v == "1";
+            else if (k == "VSync") Viewport.VSync = v == "1";   // older ini files
             else if (k == "ShowStats") ShowStats = v == "1";
             else if (k == "ShowHierarchy") ShowHierarchy = v == "1";
             else if (k == "ShowInspector") ShowInspector = v == "1";
@@ -61,8 +74,16 @@ struct EditorSettings {
     }
     void Save() const {
         std::ofstream out(File());
-        out << "LastProject=" << LastProject << "\nVSync=" << VSync << "\nShowStats=" << ShowStats
+        out << "LastProject=" << LastProject << "\nPreviewGameGraphics=" << PreviewGameGraphics << "\nShowStats=" << ShowStats
             << "\nShowHierarchy=" << ShowHierarchy << "\nShowInspector=" << ShowInspector << "\nCameraSpeed=" << CameraSpeed << "\nUIScale=" << UIScale << "\n";
+        out << "# Editor viewport quality (editor only - not exported)\n";
+        Viewport.Serialize(out, "Viewport.");
+    }
+
+    static GraphicsSettings DefaultViewport() {
+        GraphicsSettings g = GraphicsSettings::FromPreset(GraphicsSettings::Preset::Medium);
+        g.Fullscreen = false;
+        return g;
     }
 };
 
@@ -98,7 +119,7 @@ protected:
         m_TemplatesRoot = FindRepoFolder("Templates");
         m_ExportRoot = FindRepoFolder("Export");
         if (!OpenProject(m_StartProject)) NewUntitledScene();
-        GetWindow().SetVSync(m_Settings.VSync);
+        ApplyEditorGraphics();
 
         // Built-in code editor: compile-check Luau on save (errors mark the line).
         m_Code.Validate = [](const std::string& path, const std::string& source) -> std::string {
@@ -196,8 +217,10 @@ protected:
             const float right = (m_Settings.ShowInspector && !m_Playing) ? 308.0f : 8.0f;
             m_Code.Draw(ui, GetWindow(), left, top + 8, w - left - right, h - top - bottom - 16);
         }
-        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 360);
-        if (m_ShowGraphics) DrawGraphicsSettings(ui, w * 0.5f - 230, top + 40, 460, 320);
+        if (m_ShowSettings) DrawSettings(ui, w * 0.5f - 220, top + 30, 440, 400);
+        const float gw = std::min(640.0f, w - 40), gh = std::min(600.0f, h - top - 60);
+        if (m_ShowViewportQuality) DrawViewportQuality(ui, w * 0.5f - gw * 0.5f, top + 30, gw, gh);
+        if (m_ShowGraphics) DrawGraphicsSettings(ui, w * 0.5f - gw * 0.5f, top + 30, gw, gh);
         DrawToolbar(ui, w);
         if (m_Settings.ShowStats && !m_ShowCode) DrawStats(ui, w);
         DrawMenuBar(ui);
@@ -236,6 +259,7 @@ private:
             }
             ui.MenuSeparator();
             if (ui.MenuItem("Settings...")) m_ShowSettings = !m_ShowSettings;
+            if (ui.MenuItem("Editor Viewport Quality...")) { m_ShowViewportQuality = !m_ShowViewportQuality; m_ShowGraphics = false; }
             if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Project.Directory.empty() && !m_Export.Running)) ExportGame();
             if (ui.MenuItem("Open Project Folder", "", false, !m_Project.Directory.empty())) LapisApp::OpenInShell(m_Project.Directory);
             if (ui.MenuItem("Open Project in VS Code", "", false, !m_Project.Directory.empty())) {
@@ -266,7 +290,7 @@ private:
             ui.EndMenu();
         }
         if (ui.BeginMenu("Project", !m_Project.Directory.empty())) {
-            if (ui.MenuItem("Game Graphics Settings...")) m_ShowGraphics = !m_ShowGraphics;
+            if (ui.MenuItem("Game Graphics Settings...")) { m_ShowGraphics = !m_ShowGraphics; m_ShowViewportQuality = false; }
             if (ui.MenuItem("Open Project Folder")) LapisApp::OpenInShell(m_Project.Directory);
             if (ui.MenuItem("Export Game...", "", false, !m_Playing && !m_Export.Running)) ExportGame();
             ui.EndMenu();
@@ -382,50 +406,134 @@ private:
         ui.EndPanel();
     }
 
-    void DrawGraphicsSettings(UIContext& ui, float x, float y, float w, float h) {
-        Project& p = m_Project;
-        ui.BeginPanel("Game Graphics Settings  -  " + p.Name, x, y, w, h);
-        ui.Label("Used by the exported game (saved in project.lapis).", &ui.Style.TextDim);
-        ui.Spacing(4);
+    // Renders the viewport with either the editor's own quality or (preview)
+    // the project's game settings. Fullscreen never applies to the editor.
+    void ApplyEditorGraphics() {
+        GraphicsSettings g = m_Settings.PreviewGameGraphics && !m_Project.Directory.empty() ? m_Project.Graphics : m_Settings.Viewport;
+        g.Fullscreen = false;
+        ApplyGraphicsSettings(g);
+    }
+
+    // Shared body of both quality panels, generated from the settings
+    // reflection table. Returns true if anything changed.
+    struct GraphicsPanelState { int Tab = 0; float Scroll = 0.0f; };
+    bool DrawGraphicsFields(UIContext& ui, GraphicsSettings& gs, GraphicsPanelState& state, float bottom, bool game) {
+        const GPUInfo& gpu = GetRenderer().GetGPUInfo();
+        const GraphicsAPI api = GetRenderer().GetAPI();
         bool changed = false;
-        static const char* shadowNames[] = {"Off", "Low (1024)", "Medium (2048)", "High (4096)"};
-        if (ui.Button(std::string("Shadows: ") + shadowNames[Clamp(p.ShadowQuality, 0, 3)], 260)) { p.ShadowQuality = (p.ShadowQuality + 1) % 4; changed = true; }
-        if (ui.Button(Format("Shadow distance: {} m", (int)p.ShadowDistance), 260)) {
-            p.ShadowDistance = p.ShadowDistance >= 120 ? 25.0f : p.ShadowDistance + 20.0f; changed = true;
+
+        ui.Label("Preset:", &ui.Style.TextDim);
+        ui.SameLine(8);
+        for (auto preset : {GraphicsSettings::Preset::Low, GraphicsSettings::Preset::Medium, GraphicsSettings::Preset::High, GraphicsSettings::Preset::Ultra}) {
+            if (ui.Button(GraphicsSettings::PresetName(preset), 80)) { gs.ApplyPreset(preset); changed = true; }
+            ui.SameLine(4);
         }
-        if (ui.Button(Format("Anti-aliasing: {}", p.MSAA <= 1 ? std::string("Off") : std::to_string(p.MSAA) + "x MSAA"), 260)) {
-            p.MSAA = p.MSAA >= 8 ? 1 : (p.MSAA <= 1 ? 2 : p.MSAA * 2); changed = true;
+        if (ui.Button("Defaults", 80)) { gs = game ? GraphicsSettings::FromPreset(GraphicsSettings::Preset::High) : EditorSettings::DefaultViewport(); changed = true; }
+        ui.Spacing(2);
+
+        const std::vector<std::string> tabs = GraphicsSettings::Categories();
+        if (ui.Tabs(tabs, state.Tab)) state.Scroll = 0.0f;
+        const std::string& category = tabs[Clamp(state.Tab, 0, (int)tabs.size() - 1)];
+
+        const char* help = nullptr;
+        ui.BeginScroll(bottom - ui.CursorY() - ui.Style.ItemHeight, state.Scroll);
+        if (game && category == "Display") {
+            static const u32 sizes[][2] = {{1280, 720}, {1366, 768}, {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}};
+            std::vector<std::string> names;
+            int current = 0;
+            for (int i = 0; i < 6; ++i) {
+                names.push_back(Format("{} x {}", sizes[i][0], sizes[i][1]));
+                if (sizes[i][0] == m_Project.Width && sizes[i][1] == m_Project.Height) current = i;
+            }
+            if (ui.Option("Window size", current, names)) { m_Project.Width = sizes[current][0]; m_Project.Height = sizes[current][1]; changed = true; }
+            if (ui.LastItemHovered()) help = "Size of the game window when not fullscreen.";
         }
-        if (ui.Button(std::string("VSync: ") + (p.VSync ? "On" : "Off"), 260)) { p.VSync = !p.VSync; changed = true; }
-        if (ui.Button(p.MaxFPS ? Format("Frame cap: {} FPS", p.MaxFPS) : std::string("Frame cap: unlimited"), 260)) {
-            static const u32 caps[] = {0, 30, 60, 120, 144, 240};
-            size_t i = 0;
-            while (i < 6 && caps[i] != p.MaxFPS) ++i;
-            p.MaxFPS = caps[(i + 1) % 6]; changed = true;
+        for (const auto& f : GraphicsSettings::Fields()) {
+            if (category != f.Category) continue;
+            if (!game && std::string(f.Key) == "Fullscreen") continue;   // the editor is never fullscreen
+            switch (f.Type) {
+                case GraphicsSettings::FieldType::Bool: {
+                    bool v = gs.GetNumber(f) != 0.0f;
+                    if (ui.Checkbox(f.Label, v)) { gs.SetNumber(f, v ? 1.0f : 0.0f); changed = true; }
+                    break;
+                }
+                case GraphicsSettings::FieldType::Float: {
+                    float v = gs.GetNumber(f);
+                    std::string display;
+                    const std::string key = f.Key;
+                    if (key == "RenderScale" || f.Max <= 2.0f) display = Format("{}%", (int)std::lround(v * 100));
+                    else display = Format("{} m", (int)std::lround(v));
+                    if (key == "Gamma" || key == "BloomThreshold") display = Format("{}", std::lround(v * 100) / 100.0f);
+                    if (key == "Temperature") display = Format("{}", (int)std::lround(v * 100));
+                    if (key == "RenderScale" && v != 1.0f)
+                        display += Format(" ({}x{})", (u32)std::lround(GetWindow().GetWidth() * v), (u32)std::lround(GetWindow().GetHeight() * v));
+                    if (ui.SliderFloat(f.Label, v, f.Min, f.Max, f.Step, display)) { gs.SetNumber(f, v); changed = true; }
+                    break;
+                }
+                case GraphicsSettings::FieldType::Int: {
+                    float v = gs.GetNumber(f);
+                    if (ui.SliderFloat(f.Label, v, f.Min, f.Max, 1.0f, std::to_string((int)v))) { gs.SetNumber(f, v); changed = true; }
+                    break;
+                }
+                case GraphicsSettings::FieldType::Enum: {
+                    std::vector<std::string> options, reasons;
+                    std::vector<bool> hidden;
+                    for (int i = 0; i < (int)f.Options.size(); ++i) {
+                        bool hide = false;
+                        std::string why = GraphicsSettings::OptionUnavailable(f, i, gpu, api, &hide);
+                        if (!why.empty() && !hide) why += game ? " - the game falls back automatically" : " - using the fallback";
+                        options.push_back(f.Options[i]);
+                        reasons.push_back(why);
+                        hidden.push_back(hide);
+                    }
+                    int v = (int)gs.GetNumber(f);
+                    if (ui.Option(f.Label, v, options, reasons, hidden)) { gs.SetNumber(f, (float)v); changed = true; }
+                    break;
+                }
+            }
+            if (ui.LastItemHovered() && f.Help && *f.Help) help = f.Help;
         }
-        if (ui.Button(std::string("Fullscreen: ") + (p.Fullscreen ? "On" : "Off"), 260)) { p.Fullscreen = !p.Fullscreen; changed = true; }
-        if (ui.Button(Format("Window size: {} x {}", p.Width, p.Height), 260)) {
-            static const u32 sizes[][2] = {{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}};
-            size_t i = 0;
-            while (i < 4 && sizes[i][0] != p.Width) ++i;
-            i = (i + 1) % 4;
-            p.Width = sizes[i][0]; p.Height = sizes[i][1]; changed = true;
+        if (category == "Frame Generation") {
+            ui.Heading("This computer");
+            ui.Label("GPU: " + gpu.Name, &ui.Style.TextDim);
+            ui.Label(Format("Vendor: {}    Renderer: OpenGL", GPUInfo::VendorString(gpu.Vendor)), &ui.Style.TextDim);
+            ui.Label(gpu.NVIDIA_RTX ? "NVIDIA RTX detected: DLSS options are shown." : "DLSS options appear only on NVIDIA RTX GPUs.", &ui.Style.TextDim);
+            ui.Label("FSR 3 / XeSS / DLSS run on the DX12 & Vulkan renderers (Phase 12).", &ui.Style.TextDim);
         }
-        if (ui.Button(Format("Exposure: {}%", (int)(p.Exposure * 100 + 0.5f)), 260)) {
-            p.Exposure = p.Exposure >= 1.5f ? 0.6f : p.Exposure + 0.1f; changed = true;
-        }
-        if (changed) {
-            p.Save();
-            // Preview in the editor viewport (not fullscreen / frame cap / vsync).
-            GetRenderer().SetMSAA(std::max<u32>(p.MSAA, 1));
-            static const u32 mapSizes[] = {1024, 1024, 2048, 4096};
-            GetRenderer().GetShadowSettings().Enabled = p.ShadowQuality > 0;
-            GetRenderer().GetShadowSettings().MapSize = mapSizes[Clamp(p.ShadowQuality, 0, 3)];
-            GetRenderer().GetShadowSettings().Distance = p.ShadowDistance;
+        ui.EndScroll();
+        ui.Label(help ? help : " ", &ui.Style.TextDim);
+        return changed;
+    }
+
+    void DrawGraphicsSettings(UIContext& ui, float x, float y, float w, float h) {
+        ui.BeginPanel("Game Graphics Settings  -  " + m_Project.Name, x, y, w, h);
+        ui.Label("Baked into the exported game as its defaults (project.lapis). Players can", &ui.Style.TextDim);
+        ui.Label("change them in-game if your scripts use the Luau Graphics library.", &ui.Style.TextDim);
+        if (DrawGraphicsFields(ui, m_Project.Graphics, m_GamePanel, y + h - 66, true)) {
+            m_Project.Save();
+            if (m_Settings.PreviewGameGraphics) ApplyEditorGraphics();
             m_Status = "Game graphics settings saved to project.lapis";
         }
-        ui.Spacing(6);
+        bool preview = m_Settings.PreviewGameGraphics;
+        if (ui.Checkbox("Preview in the editor viewport", preview)) {
+            m_Settings.PreviewGameGraphics = preview;
+            m_Settings.Save();
+            ApplyEditorGraphics();
+        }
         if (ui.Button("Close", 90)) m_ShowGraphics = false;
+        ui.EndPanel();
+    }
+
+    void DrawViewportQuality(UIContext& ui, float x, float y, float w, float h) {
+        ui.BeginPanel("Editor Viewport Quality", x, y, w, h);
+        ui.Label("Editor only - never exported. Keep it lighter than the game for a fast editor.", &ui.Style.TextDim);
+        ui.Label(m_Settings.PreviewGameGraphics ? "Currently previewing the GAME settings (Project > Game Graphics Settings)."
+                                                : "The game's own quality: Project > Game Graphics Settings.", &ui.Style.TextDim);
+        if (DrawGraphicsFields(ui, m_Settings.Viewport, m_ViewportPanel, y + h - 36, false)) {
+            m_Settings.Save();
+            ApplyEditorGraphics();
+        }
+        if (ui.Button("Close", 90)) m_ShowViewportQuality = false;
         ui.EndPanel();
     }
 
@@ -434,10 +542,7 @@ private:
         ui.Label("Graphics API:  OpenGL 4.5 core", &ui.Style.Text);
         ui.Label("DirectX 12 / Vulkan: planned (see PLANS.txt, Phase 12)", &ui.Style.TextDim);
         ui.Spacing(6);
-        if (ui.Button(std::string("VSync: ") + (m_Settings.VSync ? "On" : "Off"), 180)) {
-            m_Settings.VSync = !m_Settings.VSync;
-            GetWindow().SetVSync(m_Settings.VSync);
-        }
+        if (ui.Button("Editor viewport quality...", 220)) { m_ShowViewportQuality = true; m_ShowSettings = false; }
         if (ui.Button(std::string("Stats overlay: ") + (m_Settings.ShowStats ? "On" : "Off"), 180)) m_Settings.ShowStats = !m_Settings.ShowStats;
         ui.Label(Format("UI size: {}%  (display scale {}%)", (int)(m_Settings.UIScale * 100 + 0.5f),
                         (int)(GetWindow().GetContentScale() * 100 + 0.5f)), &ui.Style.Text);
@@ -451,8 +556,7 @@ private:
         ui.SameLine();
         if (ui.Button("Faster", 90)) m_Settings.CameraSpeed = std::min(100.0f, m_Settings.CameraSpeed * 1.33f);
         ui.Spacing(6);
-        ui.Label("Game graphics settings live in each project's", &ui.Style.TextDim);
-        ui.Label("project.lapis (Width, Height, VSync, MSAA).", &ui.Style.TextDim);
+        ui.Label("The game's own graphics: Project > Game Graphics Settings.", &ui.Style.TextDim);
         ui.Spacing(6);
         if (ui.Button("Close", 90)) { m_ShowSettings = false; m_Settings.Save(); }
         ui.EndPanel();
@@ -755,6 +859,7 @@ private:
         if (!project) { m_Status = "Could not open project: " + dir; return false; }
         if (m_Playing) StopPlay();
         m_Project = *project;
+        if (m_Settings.PreviewGameGraphics) ApplyEditorGraphics();
         m_UndoStack.clear();
         m_RedoStack.clear();
         auto scene = MakeScene();
@@ -995,6 +1100,8 @@ private:
     bool m_Playing = false;
     bool m_ShowSettings = false;
     bool m_ShowGraphics = false;
+    bool m_ShowViewportQuality = false;
+    GraphicsPanelState m_GamePanel, m_ViewportPanel;
     bool m_ShowCode = false;
     CodeEditor m_Code;
     std::string m_Snapshot;
@@ -1026,7 +1133,8 @@ Application* Lapis::CreateApplication(int argc, char** argv) {
     spec.Window.Title = "Lapis Editor";
     spec.Window.Width = (u32)std::stoul(args.Value("--width", "1600"));
     spec.Window.Height = (u32)std::stoul(args.Value("--height", "900"));
-    spec.Window.VSync = settings.VSync;
+    spec.Window.VSync = settings.Viewport.VSync;
+    spec.MSAASamples = settings.Viewport.MSAASamples();
     spec.LogFile = (fs::path(LapisApp::ExeDir()) / "Logs" / "LapisEditor.log").string();
     spec.MaxFrames = std::stoull(args.Value("--frames", "0"));
     spec.ScreenshotOnExit = args.Value("--screenshot");

@@ -332,71 +332,91 @@ void CodeEditor::NewLine(Document& d) {
 // input
 // =============================================================================
 void CodeEditor::HandleKeyboard(Document& d, Window& window) {
-    const bool ctrl = Input::IsKeyDown(Key::Control);
-    const bool shift = Input::IsKeyDown(Key::Shift);
     bool edited = false;
 
-    auto move = [&](auto fn) {
-        fn();
-        ClampCursor(d);
-        if (!shift) Collapse(d);
-        m_Blink = 0.0f;
-    };
+    // Replay this frame's characters and key presses in the order they were
+    // typed (several can land in one slow frame), each with its own modifiers.
+    for (const Input::TextEvent& ev : Input::GetTextEvents()) {
+        const bool ctrl = ev.Ctrl && !ev.Alt;   // Ctrl+Alt = AltGr on Windows: a character, not a shortcut
+        const bool shift = ev.Shift;
+        auto move = [&](auto fn) {
+            fn();
+            ClampCursor(d);
+            if (!shift) Collapse(d);
+            m_Blink = 0.0f;
+        };
 
-    if (ctrl) {
-        if (Input::WasKeyPressed(Key::S)) Save();
-        if (Input::GetKeyPresses(Key::Z)) { if (shift) RedoStep(d); else UndoStep(d); }
-        if (Input::GetKeyPresses(Key::Y)) RedoStep(d);
-        if (Input::WasKeyPressed(Key::A)) { d.AnchorLine = 0; d.AnchorCol = 0; d.Line = (int)d.Lines.size() - 1; d.Col = (int)d.Lines.back().size(); }
-        if (Input::WasKeyPressed(Key::C) && HasSelection(d)) window.SetClipboardText(SelectedText(d));
-        if (Input::WasKeyPressed(Key::X) && HasSelection(d)) { window.SetClipboardText(SelectedText(d)); PushUndo(d); DeleteSelection(d); edited = true; }
-        if (Input::GetKeyPresses(Key::V)) {
-            const std::string clip = window.GetClipboardText();
-            if (!clip.empty()) { PushUndo(d); InsertText(d, clip); edited = true; }
-        }
-    } else {
-        const std::string& typed = Input::GetTypedText();
-        if (!typed.empty()) {
+        if (ev.Char) {
+            // Encode the code point as UTF-8.
+            std::string text;
+            const u32 c = ev.Char;
+            if (c < 0x80) text += char(c);
+            else if (c < 0x800) { text += char(0xC0 | (c >> 6)); text += char(0x80 | (c & 0x3F)); }
+            else if (c < 0x10000) { text += char(0xE0 | (c >> 12)); text += char(0x80 | ((c >> 6) & 0x3F)); text += char(0x80 | (c & 0x3F)); }
+            else { text += char(0xF0 | (c >> 18)); text += char(0x80 | ((c >> 12) & 0x3F)); text += char(0x80 | ((c >> 6) & 0x3F)); text += char(0x80 | (c & 0x3F)); }
             PushUndo(d);
-            for (char c : typed) if ((unsigned char)c >= 32) InsertText(d, std::string(1, c));
+            InsertText(d, text);
             edited = true;
+            continue;
+        }
+
+        switch (ev.KeyCode) {
+            case Key::S: if (ctrl) { if (edited) { m_LastEditFrame = m_Frame; ClampCursor(d); } Save(); } break;
+            case Key::Z: if (ctrl) { if (shift) RedoStep(d); else UndoStep(d); } break;
+            case Key::Y: if (ctrl) RedoStep(d); break;
+            case Key::A: if (ctrl) { d.AnchorLine = 0; d.AnchorCol = 0; d.Line = (int)d.Lines.size() - 1; d.Col = (int)d.Lines.back().size(); } break;
+            case Key::C: if (ctrl && HasSelection(d)) window.SetClipboardText(SelectedText(d)); break;
+            case Key::X:
+                if (ctrl && HasSelection(d)) { window.SetClipboardText(SelectedText(d)); PushUndo(d); DeleteSelection(d); edited = true; }
+                break;
+            case Key::V:
+                if (ctrl) {
+                    const std::string clip = window.GetClipboardText();
+                    if (!clip.empty()) { PushUndo(d); InsertText(d, clip); edited = true; }
+                }
+                break;
+            case Key::Backspace: PushUndo(d); Backspace(d); edited = true; break;
+            case Key::Delete: PushUndo(d); DeleteForward(d); edited = true; break;
+            case Key::Enter: PushUndo(d); NewLine(d); edited = true; break;
+            case Key::Tab:
+                PushUndo(d);
+                if (shift) {
+                    const int remove = std::min(4, LeadingSpaces(d.Lines[d.Line]));
+                    d.Lines[d.Line].erase(0, remove);
+                    d.Col = std::max(0, d.Col - remove);
+                    Collapse(d);
+                } else {
+                    InsertText(d, std::string(4 - d.Col % 4, ' '));
+                }
+                edited = true;
+                break;
+            case Key::Left:
+                move([&] { if (d.Col > 0) --d.Col; else if (d.Line > 0) { --d.Line; d.Col = (int)d.Lines[d.Line].size(); } });
+                break;
+            case Key::Right:
+                move([&] { if (d.Col < (int)d.Lines[d.Line].size()) ++d.Col; else if (d.Line + 1 < (int)d.Lines.size()) { ++d.Line; d.Col = 0; } });
+                break;
+            case Key::Up: move([&] { --d.Line; }); break;
+            case Key::Down: move([&] { ++d.Line; }); break;
+            case Key::Home:
+                move([&] {
+                    if (ctrl) { d.Line = 0; d.Col = 0; return; }
+                    const int ind = LeadingSpaces(d.Lines[d.Line]);
+                    d.Col = d.Col == ind ? 0 : ind;
+                });
+                break;
+            case Key::End:
+                move([&] {
+                    if (ctrl) d.Line = (int)d.Lines.size() - 1;
+                    d.Col = (int)d.Lines[d.Line].size();
+                });
+                break;
+            case Key::PageUp: move([&] { d.Line -= 25; }); break;
+            case Key::PageDown: move([&] { d.Line += 25; }); break;
+            case Key::Escape: m_Focused = false; break;
+            default: break;
         }
     }
-
-    for (int i = Input::GetKeyPresses(Key::Backspace); i > 0; --i) { PushUndo(d); Backspace(d); edited = true; }
-    for (int i = Input::GetKeyPresses(Key::Delete); i > 0; --i) { PushUndo(d); DeleteForward(d); edited = true; }
-    for (int i = Input::GetKeyPresses(Key::Enter); i > 0; --i) { PushUndo(d); NewLine(d); edited = true; }
-    if (Input::GetKeyPresses(Key::Tab)) {
-        PushUndo(d);
-        if (shift) {
-            const int remove = std::min(4, LeadingSpaces(d.Lines[d.Line]));
-            d.Lines[d.Line].erase(0, remove);
-            d.Col = std::max(0, d.Col - remove);
-            Collapse(d);
-        } else {
-            InsertText(d, std::string(4 - d.Col % 4, ' '));
-        }
-        edited = true;
-    }
-
-    for (int i = Input::GetKeyPresses(Key::Left); i > 0; --i)
-        move([&] { if (d.Col > 0) --d.Col; else if (d.Line > 0) { --d.Line; d.Col = (int)d.Lines[d.Line].size(); } });
-    for (int i = Input::GetKeyPresses(Key::Right); i > 0; --i)
-        move([&] { if (d.Col < (int)d.Lines[d.Line].size()) ++d.Col; else if (d.Line + 1 < (int)d.Lines.size()) { ++d.Line; d.Col = 0; } });
-    for (int i = Input::GetKeyPresses(Key::Up); i > 0; --i) move([&] { --d.Line; });
-    for (int i = Input::GetKeyPresses(Key::Down); i > 0; --i) move([&] { ++d.Line; });
-    if (Input::GetKeyPresses(Key::Home)) move([&] {
-        if (ctrl) { d.Line = 0; d.Col = 0; return; }
-        const int ind = LeadingSpaces(d.Lines[d.Line]);
-        d.Col = d.Col == ind ? 0 : ind;
-    });
-    if (Input::GetKeyPresses(Key::End)) move([&] {
-        if (ctrl) d.Line = (int)d.Lines.size() - 1;
-        d.Col = (int)d.Lines[d.Line].size();
-    });
-    if (Input::GetKeyPresses(Key::PageUp)) move([&] { d.Line -= 25; });
-    if (Input::GetKeyPresses(Key::PageDown)) move([&] { d.Line += 25; });
-    if (Input::WasKeyPressed(Key::Escape)) m_Focused = false;
 
     if (edited) { m_LastEditFrame = m_Frame; m_Blink = 0.0f; ClampCursor(d); }
 }

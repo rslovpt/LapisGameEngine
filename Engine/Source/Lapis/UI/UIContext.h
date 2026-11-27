@@ -40,6 +40,7 @@ struct UIStyle {
     float Padding = 8.0f;
     float Rounding = 4.0f;
     float PopupRounding = 6.0f;
+    float LabelColumn = 0.46f;    // settings rows: fraction of the width used by the label
 };
 
 class UIContext : NonCopyable {
@@ -79,6 +80,23 @@ public:
 
     // Standalone button at an absolute position (toolbars).
     bool ButtonAt(const std::string& label, float x, float y, float w, float h, bool active = false);
+
+    // ---- settings widgets (label column + control column, full panel width) ----
+    bool Tabs(const std::vector<std::string>& tabs, int& current);
+    bool Checkbox(const std::string& label, bool& value);
+    bool SliderFloat(const std::string& label, float& value, float min, float max, float step, const std::string& display);
+    // Cycles through options with < > buttons. reasons[i] non-empty = option is
+    // unavailable here (still selectable, shown dimmed with the reason);
+    // hidden[i] = never offered.
+    bool Option(const std::string& label, int& value, const std::vector<std::string>& options,
+                const std::vector<std::string>& reasons = {}, const std::vector<bool>& hidden = {});
+    void Heading(const std::string& text);
+    bool LastItemHovered() const { return m_LastHovered; }
+    float CursorY() const { return m_CursorY; }
+
+    // Vertical scroll region inside the current panel (rows outside are skipped).
+    void BeginScroll(float height, float& scroll);
+    void EndScroll();
 
     // --- modal message box ----------------------------------------------------------
     void OpenMessage(const std::string& title, const std::string& text);
@@ -122,6 +140,17 @@ private:
     float m_CursorX = 0, m_CursorY = 0, m_LineHeight = 0, m_SameLineX = -1;
 
     std::vector<Rect> m_HitRects, m_PrevHitRects;
+
+    // Settings widgets
+    bool RowBegin(float height, Rect& row);   // false = scrolled out of view
+    u64  WidgetID(const std::string& label) const;
+    std::string m_PanelTitle;
+    float m_LastRight = 0, m_LastY = 0;       // last item, for SameLine
+    u64   m_ActiveID = 0;                     // slider being dragged
+    bool  m_LastHovered = false;
+    bool  m_Scrolling = false;
+    float m_ScrollTop = 0, m_ScrollBottom = 0, m_ScrollContentStart = 0;
+    float* m_ScrollValue = nullptr;
 
     std::string m_MessageTitle, m_MessageText;
 };

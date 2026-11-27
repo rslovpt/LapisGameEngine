@@ -185,7 +185,57 @@ LAPIS_TEST(Scene, ProjectFile) {
     if (!p) return;
     CHECK(p->Name == "My Game");
     CHECK(p->Width == 800 && p->Height == 720);
-    CHECK(!p->VSync && p->MSAA == 2);
+    CHECK(!p->Graphics.VSync && p->Graphics.MSAASamples() == 2);   // legacy keys still load
+    p->Graphics.Bloom = false;
+    p->Graphics.RenderScale = 0.75f;
+    p->Graphics.Tonemapper = 2;
     auto again = Project::Parse(p->Serialize(), p->Directory);
     CHECK(again && again->Name == "My Game" && again->StartupScene == "Scenes/A.scene");
+    CHECK(again && again->Graphics == p->Graphics);
+}
+
+LAPIS_TEST(Graphics, SettingsReflection) {
+    GraphicsSettings g;
+    // Every field is reachable by key, round-trips through text and clamps.
+    for (const auto& f : GraphicsSettings::Fields()) {
+        CHECK(GraphicsSettings::FindField(f.Key) == &f);
+        GraphicsSettings copy;
+        CHECK(copy.Set(f.Key, g.Get(f.Key)));
+        CHECK(copy.GetNumber(f) == g.GetNumber(f));
+    }
+    CHECK(g.Set("RenderScale", "5"));
+    CHECK(g.RenderScale == 2.0f);
+    CHECK(g.Set("Tonemapper", "reinhard"));
+    CHECK(g.Tonemapper == 2);
+    CHECK(!g.Set("NoSuchSetting", "1"));
+    CHECK(!g.Set("Bloom", "maybe"));
+    CHECK(GraphicsSettings::Categories().size() == 5);
+
+    // Presets are ordered by cost.
+    const auto low = GraphicsSettings::FromPreset(GraphicsSettings::Preset::Low);
+    const auto ultra = GraphicsSettings::FromPreset(GraphicsSettings::Preset::Ultra);
+    CHECK(low.ShadowMapSize() < ultra.ShadowMapSize() && low.MSAASamples() < ultra.MSAASamples());
+}
+
+LAPIS_TEST(Graphics, HardwareFallbacks) {
+    GPUInfo amd;
+    amd.Vendor = GPUVendor::AMD;
+    amd.MaxAnisotropy = 16.0f;
+    GPUInfo rtx = amd;
+    rtx.Vendor = GPUVendor::NVIDIA;
+    rtx.NVIDIA_RTX = true;
+    const auto* up = GraphicsSettings::FindField("Upscaler");
+    bool hidden = false;
+    // DLSS is hidden without an RTX GPU, and needs DX12/Vulkan even with one.
+    CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, amd, GraphicsAPI::OpenGL, &hidden).empty() && hidden);
+    CHECK(!GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, rtx, GraphicsAPI::OpenGL, &hidden).empty() && !hidden);
+    CHECK(GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleDLSS, rtx, GraphicsAPI::Vulkan).empty());
+    CHECK(GraphicsSettings::OptionUnavailable(*up, GraphicsSettings::UpscaleFSR3, amd, GraphicsAPI::DirectX12).empty());
+
+    GraphicsSettings g;
+    g.Upscaler = GraphicsSettings::UpscaleXeSS;
+    g.FrameGeneration = GraphicsSettings::FrameGenFSR3;
+    CHECK(!g.ResolveForHardware(amd, GraphicsAPI::OpenGL).empty());
+    CHECK(g.Upscaler == GraphicsSettings::UpscaleSpatial && g.FrameGeneration == GraphicsSettings::FrameGenOff);
+    CHECK(g.ResolveForHardware(amd, GraphicsAPI::OpenGL).empty()); // nothing left to change
 }

@@ -1,5 +1,8 @@
 #include "Lapis/UI/UIContext.h"
 
+#include <cmath>
+#include <functional>
+
 #include <algorithm>
 #include <sstream>
 
@@ -169,6 +172,9 @@ void UIContext::MenuSeparator() {
 // =============================================================================
 void UIContext::BeginPanel(const std::string& title, float x, float y, float w, float h) {
     m_Panel = {x, y, w, h};
+    m_PanelTitle = title;
+    m_LastRight = x;
+    m_LastY = y;
     m_R.Rect(x, y, w, h, Style.Panel);
     m_R.Rect(x, y, w, Style.ItemHeight, Style.PanelHeader);
     m_R.Text(x + Style.Padding, y + (Style.ItemHeight - m_R.LineHeight()) * 0.5f, title, Style.Text);
@@ -188,23 +194,26 @@ void UIContext::Spacing(float pixels) { m_CursorY += pixels; }
 
 void UIContext::Label(const std::string& text, const Vec4* color) {
     if (m_CursorY + m_R.LineHeight() > m_Panel.Y + m_Panel.H) return; // clipped
-    m_R.Text(m_CursorX, m_CursorY, text, color ? *color : Style.Text);
+    const float y = m_CursorY;
+    m_R.Text(m_CursorX, y, text, color ? *color : Style.Text);
+    m_LastRight = m_CursorX + m_R.TextWidth(text);
+    m_LastY = y - (Style.ItemHeight - 2 - m_R.LineHeight()) * 0.5f;   // so a SameLine button lines up
+    m_SameLineX = -1;
     m_CursorY += m_R.LineHeight() + 3;
 }
 
 bool UIContext::Button(const std::string& label, float width) {
     const float w = width > 0 ? width : m_R.TextWidth(label) + 18.0f;
-    static float s_LastRight = 0, s_LastY = 0;
     float x = m_CursorX, y = m_CursorY;
-    if (m_SameLineX >= 0) { x = s_LastRight + m_SameLineX; y = s_LastY; m_SameLineX = -1; }
+    if (m_SameLineX >= 0) { x = m_LastRight + m_SameLineX; y = m_LastY; m_SameLineX = -1; }
     if (y + Style.ItemHeight > m_Panel.Y + m_Panel.H) return false;
     const Rect r{x, y, w, Style.ItemHeight - 2};
     const bool hovered = Hovered(r);
     m_R.Rect(r.X, r.Y, r.W, r.H, hovered ? (m_MouseDown ? Style.Active : Style.Hover) : Style.Button, Style.Rounding);
     m_R.Text(r.X + (w - m_R.TextWidth(label)) * 0.5f, r.Y + (r.H - m_R.LineHeight()) * 0.5f, label, Style.Text);
-    s_LastRight = x + w;
-    s_LastY = y;
-    m_CursorY = y + Style.ItemHeight + 2;
+    m_LastRight = x + w;
+    m_LastY = y;
+    m_CursorY = std::max(m_CursorY, y + Style.ItemHeight + 2);
     return hovered && m_MousePressed;
 }
 
@@ -227,6 +236,170 @@ bool UIContext::ButtonAt(const std::string& label, float x, float y, float w, fl
     m_R.RectOutline(x, y, w, h, Style.Border, 1.0f, Style.Rounding + 1);
     m_R.Text(x + (w - m_R.TextWidth(label)) * 0.5f, y + (h - m_R.LineHeight()) * 0.5f, label, Style.Text);
     return hovered && m_MousePressed;
+}
+
+// =============================================================================
+// Settings widgets
+// =============================================================================
+u64 UIContext::WidgetID(const std::string& label) const {
+    return (u64)std::hash<std::string>{}(m_PanelTitle + "##" + label);
+}
+
+bool UIContext::RowBegin(float height, Rect& row) {
+    row = {m_Panel.X + Style.Padding, m_CursorY, m_Panel.W - Style.Padding * 2 - (m_Scrolling ? 10.0f : 0.0f), height};
+    m_CursorY += height + 3;
+    m_LastHovered = false;
+    if (m_Scrolling) return row.Y >= m_ScrollTop - 0.5f && row.Y + row.H <= m_ScrollBottom + 0.5f;
+    return row.Y + row.H <= m_Panel.Y + m_Panel.H;
+}
+
+void UIContext::Heading(const std::string& text) {
+    Rect row;
+    const float h = m_R.LineHeight() + 8;
+    if (!RowBegin(h, row)) return;
+    m_R.Text(row.X, row.Y + 6, text, Style.Accent);
+    m_R.Rect(row.X, row.Y + h - 2, row.W, 1, Style.Button);
+}
+
+bool UIContext::Tabs(const std::vector<std::string>& tabs, int& current) {
+    const float h = Style.ItemHeight + 2;
+    float x = m_Panel.X + Style.Padding;
+    const float y = m_CursorY;
+    bool changed = false;
+    for (int i = 0; i < (int)tabs.size(); ++i) {
+        const float w = m_R.TextWidth(tabs[i]) + 22;
+        const Rect r{x, y, w, h};
+        const bool hovered = Hovered(r), active = i == current;
+        m_R.Rect(r.X, r.Y, r.W, r.H, active ? Style.Active : hovered ? Style.Hover : Style.Button, Style.Rounding);
+        m_R.Text(r.X + 11, r.Y + (h - m_R.LineHeight()) * 0.5f, tabs[i], active ? Style.Text : Style.TextDim);
+        if (hovered && m_MousePressed && !active) { current = i; changed = true; }
+        x += w + 4;
+    }
+    m_CursorY = y + h + 8;
+    return changed;
+}
+
+bool UIContext::Checkbox(const std::string& label, bool& value) {
+    Rect row;
+    if (!RowBegin(Style.ItemHeight, row)) return false;
+    const bool hovered = Hovered(row);
+    m_LastHovered = hovered;
+    if (hovered) m_R.Rect(row.X - 4, row.Y, row.W + 8, row.H, Vec4(1, 1, 1, 0.04f), Style.Rounding);
+    const float labelY = row.Y + (row.H - m_R.LineHeight()) * 0.5f;
+    m_R.Text(row.X, labelY, label, Style.Text);
+    const float bx = row.X + row.W * Style.LabelColumn, box = row.H - 8;
+    m_R.Rect(bx, row.Y + 4, box, box, value ? Style.Accent : Style.Button, Style.Rounding);
+    if (value) m_R.Text(bx + (box - m_R.TextWidth("x")) * 0.5f, labelY - 1, "x", Vec4(0.05f, 0.05f, 0.08f, 1));
+    m_R.Text(bx + box + 8, labelY, value ? "On" : "Off", Style.TextDim);
+    if (hovered && m_MousePressed) { value = !value; return true; }
+    return false;
+}
+
+bool UIContext::SliderFloat(const std::string& label, float& value, float min, float max, float step, const std::string& display) {
+    Rect row;
+    const u64 id = WidgetID(label);
+    if (!RowBegin(Style.ItemHeight, row)) { if (m_ActiveID == id && !m_MouseDown) m_ActiveID = 0; return false; }
+    const bool hovered = Hovered(row);
+    m_LastHovered = hovered;
+    if (hovered) m_R.Rect(row.X - 4, row.Y, row.W + 8, row.H, Vec4(1, 1, 1, 0.04f), Style.Rounding);
+    m_R.Text(row.X, row.Y + (row.H - m_R.LineHeight()) * 0.5f, label, Style.Text);
+
+    const float valueW = 64.0f;
+    const Rect track{row.X + row.W * Style.LabelColumn, row.Y + 4, row.W * (1.0f - Style.LabelColumn) - valueW - 6, row.H - 8};
+    if (Hovered(track) && m_MousePressed) m_ActiveID = id;
+    bool changed = false;
+    if (m_ActiveID == id) {
+        if (!m_MouseDown) m_ActiveID = 0;
+        else {
+            float t = Clamp((m_Mouse.x - track.X) / std::max(track.W, 1.0f), 0.0f, 1.0f);
+            float v = min + t * (max - min);
+            if (step > 0.0f) v = Clamp(min + std::round((v - min) / step) * step, min, max);
+            if (v != value) { value = v; changed = true; }
+        }
+    }
+    const float t = max > min ? Clamp((value - min) / (max - min), 0.0f, 1.0f) : 0.0f;
+    m_R.Rect(track.X, track.Y + track.H * 0.5f - 3, track.W, 6, Style.Button, 3);
+    m_R.Rect(track.X, track.Y + track.H * 0.5f - 3, track.W * t, 6, Style.Accent, 3);
+    const float knob = track.H;
+    m_R.Rect(track.X + track.W * t - knob * 0.5f, track.Y, knob, knob, m_ActiveID == id ? Style.Text : Vec4(0.85f, 0.87f, 0.9f, 1), knob * 0.5f);
+    m_R.Text(track.X + track.W + 10, row.Y + (row.H - m_R.LineHeight()) * 0.5f, display, Style.TextDim);
+    return changed;
+}
+
+bool UIContext::Option(const std::string& label, int& value, const std::vector<std::string>& options,
+                       const std::vector<std::string>& reasons, const std::vector<bool>& hidden) {
+    if (options.empty()) return false;
+    const int n = (int)options.size();
+    auto isHidden = [&](int i) { return i < (int)hidden.size() && hidden[i]; };
+    auto reason = [&](int i) { return i < (int)reasons.size() ? reasons[i] : std::string(); };
+    value = Clamp(value, 0, n - 1);
+    const bool unavailable = !reason(value).empty();
+
+    Rect row;
+    if (!RowBegin(Style.ItemHeight + (unavailable ? m_R.LineHeight() * 0.85f + 2 : 0.0f), row)) return false;
+    const bool hovered = Hovered(row);
+    m_LastHovered = hovered;
+    if (hovered) m_R.Rect(row.X - 4, row.Y, row.W + 8, row.H, Vec4(1, 1, 1, 0.04f), Style.Rounding);
+    const float h = Style.ItemHeight - 2;
+    m_R.Text(row.X, row.Y + (h - m_R.LineHeight()) * 0.5f, label, Style.Text);
+
+    const float x0 = row.X + row.W * Style.LabelColumn, w = row.W * (1.0f - Style.LabelColumn);
+    const Rect left{x0, row.Y, h, h}, right{x0 + w - h, row.Y, h, h}, mid{x0 + h + 3, row.Y, w - 2 * h - 6, h};
+    auto step = [&](int dir) {
+        int v = value;
+        for (int i = 0; i < n; ++i) {
+            v = (v + dir + n) % n;
+            if (!isHidden(v)) break;
+        }
+        if (v == value) return false;
+        value = v;
+        return true;
+    };
+    bool changed = false;
+    for (const Rect* r : {&left, &right, &mid}) {
+        const bool hov = Hovered(*r);
+        m_R.Rect(r->X, r->Y, r->W, r->H, hov ? Style.Hover : Style.Button, Style.Rounding);
+        if (hov && m_MousePressed) changed |= step(r == &left ? -1 : 1);
+    }
+    m_R.Text(left.X + (h - m_R.TextWidth("<")) * 0.5f, row.Y + (h - m_R.LineHeight()) * 0.5f, "<", Style.Text);
+    m_R.Text(right.X + (h - m_R.TextWidth(">")) * 0.5f, row.Y + (h - m_R.LineHeight()) * 0.5f, ">", Style.Text);
+    const std::string& text = options[value];
+    m_R.Text(mid.X + std::max(4.0f, (mid.W - m_R.TextWidth(text)) * 0.5f), row.Y + (h - m_R.LineHeight()) * 0.5f, text,
+             unavailable ? Style.TextDim : Style.Text);
+    if (unavailable) m_R.Text(x0, row.Y + h + 2, reason(value), Vec4(0.95f, 0.7f, 0.35f, 1), 0.85f);
+    return changed;
+}
+
+void UIContext::BeginScroll(float height, float& scroll) {
+    m_Scrolling = true;
+    m_ScrollValue = &scroll;
+    m_ScrollTop = m_CursorY;
+    m_ScrollBottom = std::min(m_CursorY + height, m_Panel.Y + m_Panel.H - 2);
+    const Rect area{m_Panel.X, m_ScrollTop, m_Panel.W, m_ScrollBottom - m_ScrollTop};
+    if (Hovered(area)) {
+        const float wheel = Input::GetScrollDelta();
+        if (wheel != 0.0f) scroll = std::max(0.0f, scroll - wheel * Style.ItemHeight * 3);
+    }
+    m_ScrollContentStart = m_CursorY;
+    m_CursorY -= scroll;
+}
+
+void UIContext::EndScroll() {
+    if (!m_Scrolling) return;
+    const float content = m_CursorY + *m_ScrollValue - m_ScrollContentStart;
+    const float view = m_ScrollBottom - m_ScrollTop;
+    const float maxScroll = std::max(0.0f, content - view);
+    *m_ScrollValue = Clamp(*m_ScrollValue, 0.0f, maxScroll);
+    if (maxScroll > 0.0f) {
+        const float x = m_Panel.X + m_Panel.W - 9;
+        const float thumbH = std::max(24.0f, view * view / content);
+        const float thumbY = m_ScrollTop + (view - thumbH) * (*m_ScrollValue / maxScroll);
+        m_R.Rect(x, m_ScrollTop, 5, view, Style.Button, 2.5f);
+        m_R.Rect(x, thumbY, 5, thumbH, Style.TextDim, 2.5f);
+    }
+    m_Scrolling = false;
+    m_ScrollValue = nullptr;
+    m_CursorY = m_ScrollBottom + 4;
 }
 
 // =============================================================================

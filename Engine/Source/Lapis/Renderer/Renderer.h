@@ -14,6 +14,7 @@
 #include "Lapis/Math/Geometry.h"
 #include "Lapis/Renderer/Camera.h"
 #include "Lapis/Renderer/Framebuffer.h"
+#include "Lapis/Renderer/GraphicsSettings.h"
 #include "Lapis/Renderer/Material.h"
 #include "Lapis/Renderer/Mesh.h"
 #include "Lapis/Renderer/Shader.h"
@@ -67,6 +68,15 @@ public:
     void SetMSAA(u32 samples);          // recreates the HDR target
     u32  GetMSAA() const { return m_Samples; }
 
+    // Applies every quality / effect / post-processing option. Options the
+    // GPU or backend can't run fall back automatically (see GraphicsSettings).
+    void ApplySettings(const GraphicsSettings& settings);
+    const GraphicsSettings& GetSettings() const { return m_Settings; }
+    const GPUInfo& GetGPUInfo() const { return m_GPU; }
+    GraphicsAPI GetAPI() const { return GraphicsAPI::OpenGL; }
+    u32 GetRenderWidth() const { return m_RenderWidth; }    // internal resolution
+    u32 GetRenderHeight() const { return m_RenderHeight; }
+
     void BeginFrame(const CameraView& camera, const Environment& env = {});
     void SetDirectionalLight(const DirectionalLight& light) { m_Sun = light; }
     void AddPointLight(const PointLight& light);
@@ -101,13 +111,30 @@ private:
     void SkyPass();
     void LinePass();
     void PostPass(u32 targetFBO);
+    void SSAOPass();
+    void BloomPass();
+    void CreatePostTargets();
+    void FullscreenPass();
 
-    u32 m_Width = 0, m_Height = 0;
+    u32 m_Width = 0, m_Height = 0;               // output (window) size
+    u32 m_RenderWidth = 0, m_RenderHeight = 0;   // internal size (render scale)
     u32 m_Samples = 4;
 
-    Ref<Shader> m_LitShader, m_ShadowShader, m_SkyShader, m_PostShader, m_LineShader;
+    Ref<Shader> m_LitShader, m_ShadowShader, m_SkyShader, m_LineShader;
+    Ref<Shader> m_SSAOShader, m_BlurShader, m_BloomDownShader, m_BloomUpShader, m_CompositeShader,
+                m_FXAAShader, m_UpscaleShader, m_SharpenShader;
+    Scope<Framebuffer> m_AOBuffer, m_AOBlurBuffer;  // half internal resolution
+    Scope<Framebuffer> m_LDR[2];                    // internal resolution, RGBA8
+    Scope<Framebuffer> m_OutBuffer;                 // output resolution (upscale -> sharpen)
+    std::vector<Scope<Framebuffer>> m_BloomMips;
+    Ref<Texture2D> m_Black;
+    GraphicsSettings m_Settings;
+    GPUInfo m_GPU;
+    Mat4  m_PrevViewProj = Mat4::Identity();
+    bool  m_HasPrevFrame = false;
+    float m_Time = 0.0f;
     Scope<Framebuffer> m_HDRBuffer;      // multisampled (or not, if samples <= 1)
-    Scope<Framebuffer> m_ResolveBuffer;  // single-sampled HDR texture
+    Scope<Framebuffer> m_ResolveBuffer;  // single-sampled HDR color + depth textures
     Scope<Framebuffer> m_ShadowMap;
     Scope<VertexArray> m_EmptyVAO;       // for fullscreen triangles
     Scope<VertexArray> m_LineVAO;

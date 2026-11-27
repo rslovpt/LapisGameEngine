@@ -29,8 +29,8 @@ struct ApplicationSpec {
     bool  ShowStatsInTitle = true;
     u64   MaxFrames = 0;               // >0: quit automatically after N frames (automated tests)
     std::string ScreenshotOnExit;      // write the last frame as BMP before quitting
-    bool  AutoStartScene = true;
-    u32   MaxFPS = 0;                  // frame limiter (0 = off)       // false: the scene is only rendered until started (editor)
+    bool  AutoStartScene = true;       // false: the scene is only rendered until started (editor)
+    u32   MaxFPS = 0;                  // frame limiter (0 = off)
 };
 
 class Application : NonCopyable {
@@ -50,9 +50,10 @@ public:
     const FrameTime& GetTime() const { return m_Time; }
     const ApplicationSpec& GetSpec() const { return m_Spec; }
 
-    // Applies a project's game graphics settings (vsync, MSAA, shadows,
-    // fullscreen, frame cap, exposure) to the window/renderer/scene.
-    void ApplyGraphicsSettings(const struct Project& project);
+    // Applies graphics settings to the renderer + window (vsync, fullscreen, frame cap).
+    void ApplyGraphicsSettings(const GraphicsSettings& settings);
+    // Project: multithreading options + its game graphics settings.
+    void ApplyProjectSettings(const struct Project& project);
 
     // Writes the current backbuffer to a BMP file.
     bool SaveScreenshot(const std::string& path);

@@ -38,15 +38,28 @@ std::optional<Project> Project::Parse(const std::string& text, const std::string
         else if (key == "MainScript") p.MainScript = value;
         else if (key == "Width") p.Width = ToU32(value, p.Width);
         else if (key == "Height") p.Height = ToU32(value, p.Height);
-        else if (key == "VSync") p.VSync = ToBool(value);
-        else if (key == "MSAA") p.MSAA = ToU32(value, p.MSAA);
-        else if (key == "ShadowQuality") p.ShadowQuality = (int)std::min<u32>(ToU32(value, 2), 3);
-        else if (key == "ShadowDistance") { try { p.ShadowDistance = std::stof(value); } catch (...) {} }
-        else if (key == "MaxFPS") p.MaxFPS = ToU32(value, 0);
-        else if (key == "Fullscreen") p.Fullscreen = ToBool(value);
+        else if (key.rfind("Graphics.", 0) == 0) {
+            std::string v = value;
+            const size_t hash = v.find('#');
+            if (hash != std::string::npos) v = Trim(v.substr(0, hash));
+            if (!p.Graphics.Set(key.substr(9), v)) LAPIS_WARN("project.lapis line {}: bad graphics setting '{}'", lineNo, key);
+        }
         else if (key == "Multithreading") p.Multithreading = ToBool(value);
         else if (key == "WorkerThreads") p.WorkerThreads = ToU32(value, 0);
-        else if (key == "Exposure") { try { p.Exposure = std::stof(value); } catch (...) {} }
+        // Older project files (before the full graphics settings).
+        else if (key == "VSync") p.Graphics.VSync = ToBool(value);
+        else if (key == "Fullscreen") p.Graphics.Fullscreen = ToBool(value);
+        else if (key == "MSAA") {
+            const u32 n = ToU32(value, 4);
+            p.Graphics.AntiAliasing = n >= 8 ? GraphicsSettings::AAMSAA8 : n >= 4 ? GraphicsSettings::AAMSAA4 : n >= 2 ? GraphicsSettings::AAMSAA2 : GraphicsSettings::AAOff;
+        }
+        else if (key == "ShadowQuality" || key == "ShadowDistance" || key == "Exposure") p.Graphics.Set(key, value);
+        else if (key == "MaxFPS") {
+            const u32 fps = ToU32(value, 0);
+            int best = 0;
+            for (int i = 0; i < 7; ++i) if ((u32)GraphicsSettings::FrameCapValues[i] <= fps) best = i;
+            p.Graphics.FrameCap = fps == 0 ? 0 : best;
+        }
         else LAPIS_WARN("project.lapis line {}: unknown key '{}'", lineNo, key);
     }
     return p;
@@ -65,10 +78,9 @@ std::string Project::Serialize() const {
       << "Name=" << Name << "\n"
       << "StartupScene=" << StartupScene << "\n";
     if (!MainScript.empty()) o << "MainScript=" << MainScript << "\n";
-    o << "Width=" << Width << "\nHeight=" << Height << "\nVSync=" << (VSync ? "true" : "false") << "\nMSAA=" << MSAA << "\n";
-    o << "# Game graphics settings\n"
-      << "ShadowQuality=" << ShadowQuality << "\nShadowDistance=" << ShadowDistance << "\nMaxFPS=" << MaxFPS
-      << "\nFullscreen=" << (Fullscreen ? "true" : "false") << "\nExposure=" << Exposure << "\n";
+    o << "Width=" << Width << "\nHeight=" << Height << "\n";
+    o << "# Game graphics settings (defaults of the exported game)\n";
+    Graphics.Serialize(o, "Graphics.");
     o << "# Multithreading (WorkerThreads=0 means automatic)\n"
       << "Multithreading=" << (Multithreading ? "true" : "false") << "\nWorkerThreads=" << WorkerThreads << "\n";
     return o.str();

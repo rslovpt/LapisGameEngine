@@ -73,6 +73,7 @@ uniform PointLight u_PointLights[MAX_POINT_LIGHTS];
 uniform sampler2DShadow u_ShadowMap;
 uniform int   u_ShadowsEnabled;
 uniform float u_ShadowTexel;
+uniform int   u_PCFRadius;   // 0 hard, 1 = 3x3, 2 = 5x5
 
 uniform vec3  u_FogColor;
 uniform float u_FogDensity;
@@ -96,10 +97,11 @@ float SunShadow(vec3 N, vec3 L) {
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
     float bias = max(0.0025 * (1.0 - dot(N, L)), 0.0005);
     float lit = 0.0;
-    for (int x = -1; x <= 1; ++x)
-        for (int y = -1; y <= 1; ++y)
+    for (int x = -u_PCFRadius; x <= u_PCFRadius; ++x)
+        for (int y = -u_PCFRadius; y <= u_PCFRadius; ++y)
             lit += texture(u_ShadowMap, vec3(p.xy + vec2(x, y) * u_ShadowTexel, p.z - bias));
-    return lit / 9.0;
+    float n = float(2 * u_PCFRadius + 1);
+    return lit / (n * n);
 }
 
 vec3 Shade(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo) {
@@ -216,26 +218,6 @@ void main() {
     float s = max(dot(dir, -normalize(u_SunDirection)), 0.0);
     sky += u_SunColor * (pow(s, 1200.0) * 4.0 + pow(s, 12.0) * 0.06);
     o_Color = vec4(sky, 1.0);
-}
-)";
-
-// HDR -> LDR: exposure, ACES filmic tone mapping, gamma, subtle vignette.
-inline const char* PostFragment = R"(
-#version 330 core
-in vec2 v_UV;
-uniform sampler2D u_HDR;
-uniform float u_Exposure;
-out vec4 o_Color;
-vec3 ACES(vec3 x) {
-    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-void main() {
-    vec3 hdr = texture(u_HDR, v_UV).rgb * u_Exposure;
-    vec3 ldr = pow(ACES(hdr), vec3(1.0 / 2.2));
-    vec2 q = v_UV - 0.5;
-    ldr *= 1.0 - dot(q, q) * 0.35;
-    o_Color = vec4(ldr, 1.0);
 }
 )";
 

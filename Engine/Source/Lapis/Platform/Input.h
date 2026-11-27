@@ -5,6 +5,7 @@
 //     if (Input::WasKeyPressed(Key::Space)) ...   // only on the frame it went down
 
 #include <string>
+#include <vector>
 
 #include "Lapis/Core/Base.h"
 #include "Lapis/Math/Math.h"
@@ -38,6 +39,17 @@ public:
     // presses including OS auto-repeat (for text editing).
     static const std::string& GetTypedText();
     static int  GetKeyPresses(Key key);
+
+    // Text-editing stream for this frame, in the exact order the user typed:
+    // characters and key presses (incl. auto-repeat) interleaved, each with
+    // the modifier state at that moment. Use this for text fields so input is
+    // never reordered or lost when several events land in one slow frame.
+    struct TextEvent {
+        u32  Char = 0;       // Unicode code point (0 = this is a key press)
+        Key  KeyCode = static_cast<Key>(0);   // valid only when Char == 0
+        bool Ctrl = false, Shift = false, Alt = false;
+    };
+    static const std::vector<TextEvent>& GetTextEvents();
 
     static Vec2  GetMousePosition();  // window pixels, origin top-left
     static Vec2  GetMouseDelta();     // raw movement this frame

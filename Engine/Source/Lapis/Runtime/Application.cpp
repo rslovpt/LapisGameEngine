@@ -207,19 +207,17 @@ void Application::Frame(float dt) {
     if (m_Scene) m_Scene->Perf = perf;
 }
 
-void Application::ApplyGraphicsSettings(const Project& project) {
-    m_Window->SetVSync(project.VSync);
-    if (project.WorkerThreads != JobSystem::GetWorkerCount() && project.WorkerThreads != 0) JobSystem::SetWorkerCount(project.WorkerThreads);
+void Application::ApplyGraphicsSettings(const GraphicsSettings& settings) {
+    m_Renderer.ApplySettings(settings);
+    m_Window->SetVSync(settings.VSync);
+    m_Spec.MaxFPS = settings.MaxFPS();
+    m_Window->SetFullscreen(settings.Fullscreen);
+}
+
+void Application::ApplyProjectSettings(const Project& project) {
+    if (project.WorkerThreads != 0 && project.WorkerThreads != JobSystem::GetWorkerCount()) JobSystem::SetWorkerCount(project.WorkerThreads);
     JobSystem::SetEnabled(project.Multithreading);
-    m_Renderer.SetMSAA(std::max<u32>(project.MSAA, 1));
-    ShadowSettings& shadows = m_Renderer.GetShadowSettings();
-    static const u32 sizes[] = {1024, 1024, 2048, 4096};
-    shadows.Enabled = project.ShadowQuality > 0;
-    shadows.MapSize = sizes[Clamp(project.ShadowQuality, 0, 3)];
-    shadows.Distance = project.ShadowDistance;
-    m_Spec.MaxFPS = project.MaxFPS;
-    m_Window->SetFullscreen(project.Fullscreen);
-    if (m_Scene) m_Scene->Env.Exposure *= project.Exposure;
+    ApplyGraphicsSettings(project.Graphics);
 }
 
 bool Application::SaveScreenshot(const std::string& path) {

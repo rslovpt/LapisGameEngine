@@ -60,7 +60,8 @@ constexpr GLenum GL_TEXTURE_2D = 0x0DE1, GL_TEXTURE_CUBE_MAP = 0x8513, GL_TEXTUR
 constexpr GLenum GL_TEXTURE_MAG_FILTER = 0x2800, GL_TEXTURE_MIN_FILTER = 0x2801, GL_TEXTURE_WRAP_S = 0x2802,
                  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_WRAP_R = 0x8072, GL_TEXTURE_BORDER_COLOR = 0x1004,
                  GL_TEXTURE_COMPARE_MODE = 0x884C, GL_TEXTURE_COMPARE_FUNC = 0x884D,
-                 GL_COMPARE_REF_TO_TEXTURE = 0x884E, GL_TEXTURE_MAX_ANISOTROPY = 0x84FE;
+                 GL_COMPARE_REF_TO_TEXTURE = 0x884E, GL_TEXTURE_MAX_ANISOTROPY = 0x84FE,
+                 GL_MAX_TEXTURE_MAX_ANISOTROPY = 0x84FF;
 constexpr GLenum GL_NEAREST = 0x2600, GL_LINEAR = 0x2601, GL_NEAREST_MIPMAP_NEAREST = 0x2700,
                  GL_LINEAR_MIPMAP_NEAREST = 0x2701, GL_NEAREST_MIPMAP_LINEAR = 0x2702,
                  GL_LINEAR_MIPMAP_LINEAR = 0x2703;
@@ -84,6 +85,7 @@ constexpr GLenum GL_DEBUG_OUTPUT = 0x92E0, GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242,
     X(const GLubyte*, glGetString, (GLenum name))                                                      \
     X(const GLubyte*, glGetStringi, (GLenum name, GLuint index))                                        \
     X(void, glGetIntegerv, (GLenum pname, GLint* data))                                                \
+    X(void, glGetFloatv, (GLenum pname, GLfloat* data))                                                \
     X(GLenum, glGetError, ())                                                                          \
     X(void, glViewport, (GLint x, GLint y, GLsizei w, GLsizei h))                                      \
     X(void, glScissor, (GLint x, GLint y, GLsizei w, GLsizei h))                                       \

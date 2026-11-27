@@ -16,6 +16,7 @@
 #include <string>
 
 #include "Lapis/Core/Base.h"
+#include "Lapis/Renderer/GraphicsSettings.h"
 
 namespace Lapis {
 
@@ -23,17 +24,13 @@ struct Project {
     std::string Name = "Untitled";
     std::string StartupScene = "Scenes/Main.scene";
     std::string MainScript;            // optional global script run at startup
-    u32  Width = 1280;
+    u32  Width = 1280;                 // game window size
     u32  Height = 720;
-    bool VSync = true;
-    u32  MSAA = 4;
 
-    // Game graphics settings (used by the player / exported game).
-    int   ShadowQuality = 2;      // 0 off, 1 low (1024), 2 medium (2048), 3 high (4096)
-    float ShadowDistance = 45.0f;
-    u32   MaxFPS = 0;             // 0 = unlimited (or vsync)
-    bool  Fullscreen = false;
-    float Exposure = 1.0f;
+    // Game graphics settings: baked into the exported game as its defaults
+    // ("Graphics.*" keys). Players can override them at runtime through the
+    // Luau Graphics library (saved to Saved/graphics.cfg).
+    GraphicsSettings Graphics = GraphicsSettings::FromPreset(GraphicsSettings::Preset::High);
 
     // Multithreading (job system). 0 workers = automatic (CPU threads - 1).
     bool  Multithreading = true;

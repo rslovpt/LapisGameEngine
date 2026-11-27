@@ -101,7 +101,7 @@ PHASE 4 - Renderer (OpenGL RHI + scene renderer)
 [ ] Physically based rendering (Cook-Torrance) + image based lighting
 [ ] Deferred rendering path
 [x] Instanced rendering
-[ ] Bloom / SSAO / FXAA
+[x] Bloom / SSAO / FXAA
 [ ] DirectX 11 backend behind the same RHI
 
 ------------------------------------------------------------------------------
@@ -271,15 +271,36 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [ ] Content browser (models, textures, scripts, scenes)
 [ ] Asset import: drag & drop / File > Import for 3D models (OBJ, FBX, glTF),
     textures (PNG, JPG, TGA, BMP), sounds (WAV, OGG, MP3), fonts
-[ ] File > Settings: general editor settings (separate from game settings)
+[x] File > Settings: general editor settings (separate from game settings)
 [x] Project > Game Graphics Settings (resolution, quality, shadows, MSAA,
     vsync...) stored per project and used by exported games
+[x] Two separate quality systems: Editor Viewport Quality (editor only, never
+    exported) and Game Graphics Settings (baked into the export), both
+    generated from one reflected GraphicsSettings table, with presets
+[x] Full graphics options: render scale + spatial upscaler (FSR 1-style) +
+    CAS sharpening, FXAA/MSAA, shadow quality/distance/softness, anisotropic
+    filtering, max lights, draw distance, bloom, SSAO, reflections, fog,
+    camera motion blur, tonemappers (ACES/Neutral/Reinhard/Uncharted 2),
+    exposure, contrast, saturation, temperature, gamma, vignette, film grain,
+    chromatic aberration
+[x] GPU detection (vendor / model / RTX); DLSS options only shown on NVIDIA RTX;
+    unavailable options fall back automatically at runtime
+[ ] Luau Graphics library: games build their own in-game settings menu
+    (Graphics.Get/Set/Apply/Save, presets, GPU info; player choices saved
+    to Saved/graphics.cfg)
+[ ] Frame generation / vendor upscalers wired up: AMD FSR 3, Intel XeSS,
+    NVIDIA DLSS (+ Frame Generation) - need the DX12 / Vulkan backend
 
 ------------------------------------------------------------------------------
 PHASE 12 - Multiple graphics APIs (after the first Windows test session)
 ------------------------------------------------------------------------------
 [ ] RHI abstraction: renderer talks to an interface, not OpenGL directly
 [ ] Backends: OpenGL 4.5 (current), DirectX 12, Vulkan
+[ ] DirectX 12 = DEFAULT on Windows (owner's decision). Vulkan after DX12
+    (Linux / macOS via MoltenVK / Android)
+[ ] DirectX 11 backend as the lighter fallback
+[ ] If DX12 can't start or the PC is too weak: prompt to switch to OpenGL or
+    DirectX 11 (remembered; changeable later in File > Settings)
 [ ] First-launch prompt: choose GPU/graphics API mode (remembered in settings,
     changeable later in File > Settings)
 [ ] Shader pipeline per backend (GLSL / HLSL / SPIR-V from one source)
