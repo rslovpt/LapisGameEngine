@@ -9,7 +9,16 @@
 #include "Lapis/Runtime/Project.h"
 #include "Lapis/Scripting/ScriptEngine.h"
 
+#include <atomic>
+#include <csignal>
 #include <thread>
+
+namespace {
+// Ctrl+C / SIGTERM request a normal shutdown (scene stop, GPU cleanup, log
+// flush) instead of killing the process mid-frame.
+std::atomic<bool> g_QuitSignal{false};
+extern "C" void LapisOnQuitSignal(int) { g_QuitSignal.store(true); }
+} // namespace
 
 namespace Lapis {
 
@@ -80,7 +89,11 @@ int Application::Run() {
     Timer frameTimer, titleTimer;
     u32 framesSinceTitle = 0;
 
+    std::signal(SIGINT, LapisOnQuitSignal);
+    std::signal(SIGTERM, LapisOnQuitSignal);
+
     while (m_Running) {
+        if (g_QuitSignal.load()) { LAPIS_INFO("Quit signal received"); m_Running = false; break; }
         Input::NewFrame();
         m_Window->PollEvents();
         if (!m_Running) break;

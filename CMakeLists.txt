@@ -13,6 +13,19 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+# Memory-safety builds: -DLAPIS_SANITIZE=ON enables AddressSanitizer +
+# LeakSanitizer + UndefinedBehaviorSanitizer (GCC/Clang) or ASan (MSVC).
+option(LAPIS_SANITIZE "Build with address/leak/UB sanitizers" OFF)
+if(LAPIS_SANITIZE)
+    if(MSVC)
+        add_compile_options(/fsanitize=address)
+    else()
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
+    message(STATUS "Lapis: sanitizers enabled")
+endif()
+
 
 # Put every executable and library in one place so the Sandbox can find
 # its Assets folder relative to the executable.
