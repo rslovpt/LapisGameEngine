@@ -259,6 +259,14 @@ PHASE 11 - Lapis Editor (Unreal-style)
 [x] Engine UI module: baked font, batched 2D renderer, immediate-mode widgets
 [x] Menu bar: File / Edit / Window / Help with submenus and shortcuts
 [x] File > Templates: First Person Character (more templates later)
+[x] Third Person Character template (orbit camera with wall avoidance, model
+    faces movement, double jump, pushable crates, courtyard level)
+[x] 2D Platformer template (orthographic camera, rigid body axis lock,
+    coyote time / jump buffer / variable jump, enemies, moving platforms,
+    checkpoints, goal, parallax background)
+[ ] Top Down template
+[x] Entity.RenderPosition (interpolated) so cameras follow without jitter
+[x] Rigid body axis locks (lock=x/y/z) for 2D / 2.5D games
 [x] Play-in-editor: Play / Stop, scene snapshot restored on Stop
 [x] Hierarchy + Inspector panels, selection highlight
 [x] File > Export Game: package to Export/<Game>/<Game>.exe from the editor

@@ -253,7 +253,8 @@ private:
             ui.MenuSeparator();
             if (ui.BeginMenu("Templates")) {
                 if (ui.MenuItem("First Person Character")) CreateFromTemplate("FirstPerson");
-                ui.MenuItem("Third Person (coming soon)", "", false, false);
+                if (ui.MenuItem("Third Person Character")) CreateFromTemplate("ThirdPerson");
+                if (ui.MenuItem("2D Platformer")) CreateFromTemplate("Platformer2D");
                 ui.MenuItem("Top Down (coming soon)", "", false, false);
                 ui.EndMenu();
             }

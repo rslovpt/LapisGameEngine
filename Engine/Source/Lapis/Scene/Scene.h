@@ -77,6 +77,13 @@ public:
     } Perf;
 
     // Folder scripts may read/write through the Luau `File` library.
+    // Fraction (0..1) of the way from the previous physics step to the
+    // current one at which this frame is drawn. Set by the runtime each frame.
+    float InterpolationAlpha = 1.0f;
+    // Where an entity is actually drawn this frame (interpolated physics
+    // position). Cameras should follow this to stay perfectly smooth.
+    Vec3 GetRenderPosition(EntityID id);
+
     std::string SaveDirectory;           // default: <asset root>/Saved
 
     Environment Env;

@@ -84,11 +84,14 @@ struct RigidBodyComponent {
     float    Friction = 0.5f;
     float    LinearDamping = 0.05f;
     float    GravityScale = 1.0f;
+    u8       LockAxes = 0;          // LockX | LockY | LockZ: no movement along these world axes (2D games lock Z)
     bool     Sleeping = false;
     float    SleepTimer = 0.0f;
 
     // Accumulated per step, cleared by the physics world.
     Vec3     Force{0.0f};
+
+    static constexpr u8 LockX = 1, LockY = 2, LockZ = 4;
 
     float InverseMass() const { return (Type == BodyType::Dynamic && Mass > 0.0f) ? 1.0f / Mass : 0.0f; }
     void  AddForce(const Vec3& f) { Force += f; Sleeping = false; }

@@ -202,6 +202,7 @@ int E_Index(lua_State* L) {
     if (key == "Rotation") { PushVec(L, t.GetEulerDegrees()); return 1; }
     if (key == "Scale") { PushVec(L, t.Scale); return 1; }
     if (key == "WorldPosition") { PushVec(L, t.WorldPosition()); return 1; }
+    if (key == "RenderPosition") { PushVec(L, scene.GetRenderPosition(id)); return 1; }
     if (key == "Forward") { PushVec(L, t.Forward()); return 1; }
     if (key == "Right") { PushVec(L, t.Right()); return 1; }
     if (key == "Up") { PushVec(L, t.Up()); return 1; }

@@ -218,6 +218,25 @@ bool Scene::GetPrimaryCamera(float aspect, CameraView& out) {
     return true;
 }
 
+Vec3 Scene::GetRenderPosition(EntityID id) {
+    Entity e = GetEntity(id);
+    if (!e) return Vec3(0.0f);
+    const TransformComponent& t = e.Transform();
+    Vec3 p = t.WorldPosition();
+    // Walk up to the first moving rigid body (the entity or a parent) and
+    // apply its interpolation offset.
+    for (EntityID cur = id; registry.IsValid(cur);) {
+        const TransformComponent& ct = registry.Get<TransformComponent>(cur);
+        if (const auto* rb = registry.TryGet<RigidBodyComponent>(cur); rb && m_Running && rb->Type != BodyType::Static && !rb->Sleeping) {
+            const Vec3 offset = (ct.PrevPosition - ct.Position) * (1.0f - Clamp(InterpolationAlpha, 0.0f, 1.0f));
+            if (LengthSq(offset) < 4.0f) p += offset;
+            break;
+        }
+        cur = ct.Parent;
+    }
+    return p;
+}
+
 void Scene::OnRender(Renderer& renderer, float aspect, const CameraView* overrideCamera, float interpolation) {
     // Draw physics bodies between their last two simulated positions.
     const bool interpolate = m_Running && interpolation < 1.0f;

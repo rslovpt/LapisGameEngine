@@ -1,0 +1,5 @@
+# Lapis project - 2D Platformer template
+Name=Platformer2D
+StartupScene=Scenes/Main.scene
+Width=1280
+Height=720

@@ -170,6 +170,7 @@ void Application::Frame(float dt) {
     }
 
     phase.Reset();
+    if (m_Scene) m_Scene->InterpolationAlpha = m_Accumulator / m_Spec.FixedTimestep;
     if (m_Scene) m_Scene->OnUpdate(dt);
     OnUpdate(dt);
     perf.ScriptMs = (float)phase.ElapsedMillis();

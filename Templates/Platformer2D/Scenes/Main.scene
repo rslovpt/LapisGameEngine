@@ -1,0 +1,561 @@
+# Lapis Scene v1 - 2D Platformer template: orthographic side-scroller on the X-Y plane
+Scene name="Platformer2D"
+Environment zenith=0.35,0.6,0.95 horizon=0.75,0.88,1 ground=0.4,0.55,0.4 ambient=0.6 reflection=0.3 fog=0 exposure=1.05
+Physics gravity=0,-30,0
+
+Entity id=1 name="Player"
+  Transform position=0,1,0
+  Collider shape=Box size=0.45,0.45,0.45
+  RigidBody type=Dynamic mass=1 restitution=0 friction=0 damping=0 gravity=1 lock=z
+  Script path="Scripts/Player2D.luau"
+
+Entity id=2 name="PlayerModel"
+  Transform position=0,0,0 scale=0.9,0.9,0.9 parent=1
+  MeshRenderer mesh="Cube" color=1,0.45,0.25,1 roughness=0.5
+
+Entity id=3 name="EyeL"
+  Transform position=-0.15,0.15,0.46 scale=0.22,0.28,0.05 parent=1
+  MeshRenderer mesh="Cube" color=1,1,1,1 roughness=0.3 shadows=0
+
+Entity id=4 name="PupilL"
+  Transform position=-0.15,0.13,0.5 scale=0.1,0.14,0.05 parent=1
+  MeshRenderer mesh="Cube" color=0.05,0.05,0.08,1 roughness=0.3 shadows=0
+
+Entity id=5 name="EyeR"
+  Transform position=0.15,0.15,0.46 scale=0.22,0.28,0.05 parent=1
+  MeshRenderer mesh="Cube" color=1,1,1,1 roughness=0.3 shadows=0
+
+Entity id=6 name="PupilR"
+  Transform position=0.15,0.13,0.5 scale=0.1,0.14,0.05 parent=1
+  MeshRenderer mesh="Cube" color=0.05,0.05,0.08,1 roughness=0.3 shadows=0
+
+Entity id=7 name="MainCamera"
+  Transform position=0,4,20
+  Camera fov=60 near=0.1 far=200 primary=1 ortho=1 size=7
+  Script path="Scripts/Camera2D.luau"
+
+Entity id=8 name="Sun"
+  Transform position=0,10,0 rotation=-38,22,0
+  Light type=Directional color=1,0.96,0.88 intensity=3.0 shadows=1
+
+Entity id=9 name="Ground1"
+  Transform position=7.0,-3.0,0 scale=26,6,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=10 name="Grass1"
+  Transform position=7.0,-0.15,0.02 scale=26,0.3,2.04
+  MeshRenderer mesh="Cube" color=0.35,0.75,0.35,1 roughness=0.9
+
+Entity id=11 name="Ground2"
+  Transform position=32.0,-3.0,0 scale=16,6,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=12 name="Grass2"
+  Transform position=32.0,-0.15,0.02 scale=16,0.3,2.04
+  MeshRenderer mesh="Cube" color=0.35,0.75,0.35,1 roughness=0.9
+
+Entity id=13 name="Ground3"
+  Transform position=53.0,-3.0,0 scale=14,6,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=14 name="Grass3"
+  Transform position=53.0,-0.15,0.02 scale=14,0.3,2.04
+  MeshRenderer mesh="Cube" color=0.35,0.75,0.35,1 roughness=0.9
+
+Entity id=15 name="Ground4"
+  Transform position=82.0,-3.0,0 scale=20,6,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=16 name="Grass4"
+  Transform position=82.0,-0.15,0.02 scale=20,0.3,2.04
+  MeshRenderer mesh="Cube" color=0.35,0.75,0.35,1 roughness=0.9
+
+Entity id=17 name="Ground5"
+  Transform position=110.0,-3.0,0 scale=28,6,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=18 name="Grass5"
+  Transform position=110.0,-0.15,0.02 scale=28,0.3,2.04
+  MeshRenderer mesh="Cube" color=0.35,0.75,0.35,1 roughness=0.9
+
+Entity id=19 name="WallLeft"
+  Transform position=-7.0,3.0,0 scale=2,18,2
+  MeshRenderer mesh="Cube" color=0.55,0.38,0.24,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=20 name="Platform1"
+  Transform position=8.0,2.25,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=21 name="Platform2"
+  Transform position=12.5,3.95,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=22 name="Platform3"
+  Transform position=17.0,5.55,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=23 name="Platform4"
+  Transform position=27.0,2.15,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=24 name="Platform5"
+  Transform position=32.0,3.35,0 scale=2.5,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=25 name="Platform6"
+  Transform position=36.5,2.15,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=26 name="Platform7"
+  Transform position=50.0,2.35,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=27 name="Platform8"
+  Transform position=54.0,4.15,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=28 name="Platform9"
+  Transform position=78.0,2.35,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=29 name="Platform10"
+  Transform position=82.5,4.15,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=30 name="Platform11"
+  Transform position=87.0,2.55,0 scale=3.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=31 name="Platform12"
+  Transform position=100.0,1.95,0 scale=2.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=32 name="Platform13"
+  Transform position=103.0,3.35,0 scale=2.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=33 name="Platform14"
+  Transform position=106.0,4.75,0 scale=2.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=34 name="Platform15"
+  Transform position=109.0,6.15,0 scale=2.0,0.5,2
+  MeshRenderer mesh="Cube" color=0.85,0.6,0.35,1 roughness=0.7
+  Collider shape=Box
+
+Entity id=35 name="Step1"
+  Transform position=112.75,0.3,0 scale=1.5,0.6,2
+  MeshRenderer mesh="Cube" color=0.7,0.7,0.75,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=36 name="Step2"
+  Transform position=114.25,0.6,0 scale=1.5,1.2,2
+  MeshRenderer mesh="Cube" color=0.7,0.7,0.75,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=37 name="Step3"
+  Transform position=115.75,0.9,0 scale=1.5,1.8,2
+  MeshRenderer mesh="Cube" color=0.7,0.7,0.75,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=38 name="Step4"
+  Transform position=117.25,1.2,0 scale=1.5,2.4,2
+  MeshRenderer mesh="Cube" color=0.7,0.7,0.75,1 roughness=0.8
+  Collider shape=Box
+
+Entity id=39 name="MovingPlatform"
+  Transform position=62,-0.25,0 scale=3,0.5,2
+  MeshRenderer mesh="Cube" color=0.45,0.6,0.95,1 roughness=0.5
+  Collider shape=Box
+  Script path="Scripts/MovingPlatform.luau"
+
+Entity id=40 name="Lift"
+  Transform position=93.5,0,0 scale=2.5,0.5,2
+  MeshRenderer mesh="Cube" color=0.45,0.6,0.95,1 roughness=0.5
+  Collider shape=Box
+  Script path="Scripts/MovingPlatform.luau"
+
+Entity id=41 name="Enemy"
+  Transform position=15,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=42 name="Enemy"
+  Transform position=34,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=43 name="Enemy"
+  Transform position=52,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=44 name="Enemy"
+  Transform position=80,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=45 name="Enemy"
+  Transform position=90,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=46 name="Enemy"
+  Transform position=118,0.45,0 scale=0.9,0.9,0.9
+  MeshRenderer mesh="Sphere" color=0.55,0.25,0.75,1 roughness=0.4
+  Collider shape=Box size=0.45,0.45,0.45 trigger=1
+  Script path="Scripts/Enemy.luau"
+
+Entity id=47 name="Spikes"
+  Transform position=29.5,0.2,0 scale=2,0.4,1.6
+  MeshRenderer mesh="Cube" color=0.75,0.75,0.8,1 roughness=0.2 metallic=1
+  Collider shape=Box trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=48 name="Spikes"
+  Transform position=85,0.2,0 scale=2,0.4,1.6
+  MeshRenderer mesh="Cube" color=0.75,0.75,0.8,1 roughness=0.2 metallic=1
+  Collider shape=Box trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=49 name="Coin"
+  Transform position=4,1.2,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=50 name="Coin"
+  Transform position=8,3.5,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=51 name="Coin"
+  Transform position=12.5,5.2,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=52 name="Coin"
+  Transform position=17,6.8,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=53 name="Coin"
+  Transform position=21,1.2,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=54 name="Coin"
+  Transform position=27,3.4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=55 name="Coin"
+  Transform position=32,4.6,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=56 name="Coin"
+  Transform position=36.5,3.4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=57 name="Coin"
+  Transform position=44,2.5,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=58 name="Coin"
+  Transform position=50,3.6,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=59 name="Coin"
+  Transform position=54,5.4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=60 name="Coin"
+  Transform position=62,1.8,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=61 name="Coin"
+  Transform position=66,2.2,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=62 name="Coin"
+  Transform position=70,1.8,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=63 name="Coin"
+  Transform position=78,3.6,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=64 name="Coin"
+  Transform position=82.5,5.4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=65 name="Coin"
+  Transform position=87,3.8,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=66 name="Coin"
+  Transform position=100,3.2,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=67 name="Coin"
+  Transform position=103,4.6,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=68 name="Coin"
+  Transform position=106,6,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=69 name="Coin"
+  Transform position=109,7.4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=70 name="Coin"
+  Transform position=116,4,0 scale=0.55,0.55,0.12
+  MeshRenderer mesh="Sphere" color=1,0.82,0.2,1 roughness=0.2 metallic=1 emissive=0.5,0.38,0.03 shadows=0
+  Collider shape=Sphere radius=0.7 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=71 name="Checkpoint"
+  Transform position=48,1,0 rotation=0,0,-25 scale=0.2,2,0.2
+  MeshRenderer mesh="Cube" color=0.3,0.9,0.5,1 roughness=0.4 emissive=0.1,0.4,0.15
+  Collider shape=Box size=0.8,1.2,0.8 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=72 name="GoalPole"
+  Transform position=120,3,0 scale=0.2,6,0.2
+  MeshRenderer mesh="Cube" color=0.9,0.9,0.92,1 roughness=0.3 metallic=1
+
+Entity id=73 name="Goal"
+  Transform position=121,5.3,0 scale=2,1.3,0.1
+  MeshRenderer mesh="Cube" color=1,0.25,0.3,1 roughness=0.6 emissive=0.4,0.05,0.05
+  Collider shape=Box size=1.5,4,1 trigger=1
+  Script path="Scripts/Pickup.luau"
+
+Entity id=74 name="GoalLight"
+  Transform position=120,6.5,1.5 scale=0.3,0.3,0.3
+  MeshRenderer mesh="Sphere" color=1,0.9,0.6,1 unlit=1 emissive=4,3.2,1.6 shadows=0
+  Light type=Point color=1,0.85,0.5 intensity=25 range=10
+
+Entity id=75 name="FarHill1"
+  Transform position=-11.057,-3,-40 scale=15.508,10.856,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=76 name="FarHill2"
+  Transform position=1.906,-3,-40 scale=14.724,10.307,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=77 name="FarHill3"
+  Transform position=12.215,-3,-40 scale=17.657,12.36,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=78 name="FarHill4"
+  Transform position=20.348,-3,-40 scale=19.074,13.352,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=79 name="FarHill5"
+  Transform position=31.225,-3,-40 scale=18.336,12.836,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=80 name="FarHill6"
+  Transform position=42.419,-3,-40 scale=14.907,10.435,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=81 name="FarHill7"
+  Transform position=55.547,-3,-40 scale=22.269,15.588,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=82 name="FarHill8"
+  Transform position=64.743,-3,-40 scale=16.232,11.363,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=83 name="FarHill9"
+  Transform position=78.765,-3,-40 scale=23.477,16.434,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=84 name="FarHill10"
+  Transform position=89.463,-3,-40 scale=17.967,12.577,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=85 name="FarHill11"
+  Transform position=102.858,-3,-40 scale=14.466,10.126,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=86 name="FarHill12"
+  Transform position=113.151,-3,-40 scale=16.896,11.827,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=87 name="FarHill13"
+  Transform position=119.866,-3,-40 scale=15.178,10.625,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=88 name="FarHill14"
+  Transform position=131.851,-3,-40 scale=22.161,15.513,2
+  MeshRenderer mesh="Sphere" color=0.55,0.72,0.85,1 roughness=1 shadows=0
+
+Entity id=89 name="MidHill1"
+  Transform position=-9.277,-2.5,-20 scale=11.49,7.468,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=90 name="MidHill2"
+  Transform position=1.556,-2.5,-20 scale=10.234,6.652,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=91 name="MidHill3"
+  Transform position=10.191,-2.5,-20 scale=8.377,5.445,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=92 name="MidHill4"
+  Transform position=17.238,-2.5,-20 scale=9.236,6.003,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=93 name="MidHill5"
+  Transform position=28.722,-2.5,-20 scale=10.566,6.868,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=94 name="MidHill6"
+  Transform position=36.257,-2.5,-20 scale=11.513,7.484,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=95 name="MidHill7"
+  Transform position=45.813,-2.5,-20 scale=9.799,6.369,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=96 name="MidHill8"
+  Transform position=56.178,-2.5,-20 scale=12.194,7.926,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=97 name="MidHill9"
+  Transform position=62.976,-2.5,-20 scale=11.447,7.44,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=98 name="MidHill10"
+  Transform position=73.101,-2.5,-20 scale=13.251,8.613,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=99 name="MidHill11"
+  Transform position=82.918,-2.5,-20 scale=9.728,6.323,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=100 name="MidHill12"
+  Transform position=92.921,-2.5,-20 scale=8.708,5.66,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=101 name="MidHill13"
+  Transform position=99.672,-2.5,-20 scale=12.543,8.153,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=102 name="MidHill14"
+  Transform position=107.608,-2.5,-20 scale=10.934,7.107,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=103 name="MidHill15"
+  Transform position=116.157,-2.5,-20 scale=12.009,7.806,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=104 name="MidHill16"
+  Transform position=128.058,-2.5,-20 scale=11.438,7.435,2
+  MeshRenderer mesh="Sphere" color=0.3,0.6,0.4,1 roughness=1
+
+Entity id=105 name="FarCloud1"
+  Transform position=-1.996,9.255,-35 scale=6.086,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=106 name="FarCloud2"
+  Transform position=9.755,10.32,-35 scale=5.369,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=107 name="FarCloud3"
+  Transform position=25.72,11.779,-35 scale=5.422,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=108 name="FarCloud4"
+  Transform position=38.313,8.243,-35 scale=6.104,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=109 name="FarCloud5"
+  Transform position=52.177,11.972,-35 scale=6.466,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=110 name="FarCloud6"
+  Transform position=63.277,9.543,-35 scale=6.006,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=111 name="FarCloud7"
+  Transform position=75.181,9.847,-35 scale=4.504,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=112 name="FarCloud8"
+  Transform position=89.937,8.236,-35 scale=6.305,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=113 name="FarCloud9"
+  Transform position=104.035,8.99,-35 scale=5.173,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=114 name="FarCloud10"
+  Transform position=123.971,8.322,-35 scale=5.348,1.4,1
+  MeshRenderer mesh="Sphere" color=1,1,1,1 roughness=1 unlit=1 emissive=0.9,0.92,0.95 shadows=0
+
+Entity id=115 name="SettingsMenu"
+  Transform position=0,0,0
+  Script path="Scripts/SettingsMenu.luau"

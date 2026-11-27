@@ -14,7 +14,8 @@ See [`PLANS.txt`](PLANS.txt) for the roadmap/checklist and
    **"Desktop development with C++"** (CMake comes with it).
 2. Double-click **`LapisEditor.bat`**.
    The first run compiles everything (a few minutes), then the editor opens.
-3. In the editor: **File > Templates > First Person Character**, then press
+3. In the editor: **File > Templates** (First Person Character, Third Person
+   Character or 2D Platformer), then press
    **Play** (F5). **File > Export Game...** creates `Export\<Game>\<Game>.exe`.
 
 Other one-click files:

@@ -155,7 +155,14 @@ std::string Serialize(Scene& scene) {
             const char* type = rb->Type == BodyType::Static ? "Static" : rb->Type == BodyType::Kinematic ? "Kinematic" : "Dynamic";
             o << "  RigidBody type=" << type << " mass=" << Num(rb->Mass) << " restitution=" << Num(rb->Restitution)
               << " friction=" << Num(rb->Friction) << " damping=" << Num(rb->LinearDamping) << " gravity=" << Num(rb->GravityScale)
-              << " velocity=" << V3(rb->Velocity) << "\n";
+              << " velocity=" << V3(rb->Velocity);
+            if (rb->LockAxes) {
+                o << " lock=";
+                if (rb->LockAxes & RigidBodyComponent::LockX) o << "x";
+                if (rb->LockAxes & RigidBodyComponent::LockY) o << "y";
+                if (rb->LockAxes & RigidBodyComponent::LockZ) o << "z";
+            }
+            o << "\n";
         }
         if (auto* l = e.TryGet<LightComponent>()) {
             o << "  Light type=" << (l->Type == LightType::Directional ? "Directional" : "Point") << " color=" << V3(l->Color)
@@ -272,6 +279,8 @@ bool Deserialize(Scene& scene, const std::string& text, std::string* error, bool
             rb.LinearDamping = l.F("damping", rb.LinearDamping);
             rb.GravityScale = l.F("gravity", rb.GravityScale);
             rb.Velocity = l.V3("velocity", rb.Velocity);
+            for (char c : l.Str("lock", ""))
+                rb.LockAxes |= c == 'x' ? RigidBodyComponent::LockX : c == 'y' ? RigidBodyComponent::LockY : c == 'z' ? RigidBodyComponent::LockZ : 0;
         } else if (l.Tag == "Light") {
             auto& li = current.Add<LightComponent>();
             li.Type = l.Str("type", "Point") == "Directional" ? LightType::Directional : LightType::Point;

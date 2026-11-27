@@ -132,6 +132,11 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         bodies.push_back({id, &t, rb, &c, rb ? rb->InverseMass() : 0.0f, {}});
     });
 
+    // Positions before this step, for bodies with axis locks.
+    std::vector<Vec3> lockedStart(bodies.size());
+    for (size_t i = 0; i < bodies.size(); ++i)
+        if (bodies[i].RB && bodies[i].RB->LockAxes) lockedStart[i] = bodies[i].Transform->Position;
+
     // 2. Integrate forces -> velocities.
     for (Body& b : bodies) {
         if (!b.RB || b.RB->Type != BodyType::Dynamic) { if (b.RB) b.RB->Force = Vec3(0.0f); continue; }
@@ -139,6 +144,7 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         if (!rb.Sleeping) {
             rb.Velocity += (Settings.Gravity * rb.GravityScale + rb.Force * b.InvMass) * dt;
             rb.Velocity *= 1.0f / (1.0f + rb.LinearDamping * dt);
+            for (int axis = 0; axis < 3; ++axis) if (rb.LockAxes & (1 << axis)) rb.Velocity[axis] = 0.0f;
         }
         rb.Force = Vec3(0.0f);
     }
@@ -327,6 +333,17 @@ void PhysicsWorld::Step(Registry& registry, float dt) {
         const Vec3 corr = c.Normal * amount;
         if (a.InvMass > 0.0f) a.Transform->Position -= corr * a.InvMass;
         if (b.InvMass > 0.0f) b.Transform->Position += corr * b.InvMass;
+    }
+
+    // Axis locks (2D games): undo any movement along locked axes.
+    for (size_t i = 0; i < bodies.size(); ++i) {
+        RigidBodyComponent* rb = bodies[i].RB;
+        if (!rb || !rb->LockAxes) continue;
+        for (int axis = 0; axis < 3; ++axis) {
+            if (!(rb->LockAxes & (1 << axis))) continue;
+            rb->Velocity[axis] = 0.0f;
+            bodies[i].Transform->Position[axis] = lockedStart[i][axis];
+        }
     }
 
     // 8. Sleeping.

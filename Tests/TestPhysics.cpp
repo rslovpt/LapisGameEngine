@@ -156,3 +156,37 @@ LAPIS_TEST(Physics, BroadphaseFindsAllPairs) {
     CHECK(s.GetPhysics().GetContactCount() == expected);
     CHECK(expected > 50); // the test actually exercises overlaps
 }
+
+LAPIS_TEST(Physics, AxisLockKeepsBodiesIn2DPlane) {
+    Scene s;
+    MakeGround(s);
+    Entity a = MakeBody(s, ColliderShape::Box, {0, 3, 0});
+    Entity b = MakeBody(s, ColliderShape::Box, {0.3f, 5, 0.4f});   // lands off-center on a
+    a.Get<RigidBodyComponent>().LockAxes = RigidBodyComponent::LockZ;
+    b.Get<RigidBodyComponent>().LockAxes = RigidBodyComponent::LockZ;
+    a.Get<RigidBodyComponent>().Velocity = {0, 0, 5};   // would drift in Z without the lock
+    s.OnStart();
+    Simulate(s, 2.0f);
+    CHECK(a.Transform().Position.z == 0.0f);
+    CHECK(b.Transform().Position.z == 0.4f);
+    CHECK(b.Transform().Position.y > a.Transform().Position.y);   // still stacked / fell, but in-plane
+}
+
+LAPIS_TEST(Physics, RenderPositionIsInterpolated) {
+    Scene s;
+    Entity e = MakeBody(s, ColliderShape::Sphere, {0, 100, 0});
+    Entity child = s.CreateEntity("Child");
+    child.Transform().Parent = e.GetID();
+    child.Transform().Position = {0, 1, 0};
+    s.OnStart();
+    Simulate(s, 0.5f);
+    s.UpdateTransforms();
+    const auto& t = e.Transform();
+    s.InterpolationAlpha = 1.0f;   // drawn exactly at the simulated position
+    CHECK_NEAR(s.GetRenderPosition(e.GetID()).y, t.Position.y);
+    s.InterpolationAlpha = 0.0f;   // drawn at the previous step
+    CHECK_NEAR(s.GetRenderPosition(e.GetID()).y, t.PrevPosition.y);
+    CHECK_NEAR(s.GetRenderPosition(child.GetID()).y, t.PrevPosition.y + 1.0f);   // children follow
+    s.InterpolationAlpha = 0.5f;
+    CHECK_NEAR(s.GetRenderPosition(e.GetID()).y, (t.Position.y + t.PrevPosition.y) * 0.5f);
+}
