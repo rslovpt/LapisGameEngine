@@ -17,6 +17,9 @@
 //    falls back to OpenGL.
 
 #include <algorithm>
+#include <climits>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <string>

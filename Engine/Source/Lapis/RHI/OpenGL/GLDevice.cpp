@@ -9,6 +9,7 @@
 //  * Samplers are sampler objects bound per texture unit.
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 
 #include "Lapis/Core/Log.h"
