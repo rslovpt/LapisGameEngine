@@ -190,3 +190,40 @@ LAPIS_TEST(Luau, HotReload) {
     scene.OnUpdate(0.1f);
     CHECK(e.GetName() == "v2");
 }
+
+LAPIS_TEST(Luau, GraphicsLibrary) {
+    Scene scene;
+    const std::string dir = (std::filesystem::temp_directory_path() / "lapis_gfx_test").string();
+    std::filesystem::remove_all(dir);
+    scene.SaveDirectory = dir;
+    ScriptEngine& se = scene.GetScripts();
+    se.Graphics = GraphicsSettings::FromPreset(GraphicsSettings::Preset::High);
+    se.GraphicsDefaults = se.Graphics;
+
+    CHECK(se.RunString(R"(
+        assert(Graphics.Get("Bloom") == true)
+        assert(Graphics.Get("Tonemapper") == "ACES Filmic")
+        assert(Graphics.Set("RenderScale", 0.5) and Graphics.Get("RenderScale") == 0.5)
+        assert(Graphics.Set("Tonemapper", "Reinhard"))
+        assert(Graphics.Set("Bloom", false))
+        assert(not Graphics.Set("Tonemapper", "NotAMode"))
+        -- enough metadata to build a settings menu
+        local all = Graphics.Settings()
+        assert(#all > 20 and all[1].Key and all[1].Label and all[1].Category and all[1].Type)
+        local found = false
+        for _, s in all do if s.Key == "Upscaler" then found = #s.Options >= 4 end end
+        assert(found)
+        assert(#Graphics.Categories() == 5)
+        assert(Graphics.GPU().API == "OpenGL")
+        assert(Graphics.Save())
+        Graphics.Apply()
+    )"));
+    CHECK(se.GraphicsApplyRequested);
+    CHECK(se.Graphics.RenderScale == 0.5f && se.Graphics.Tonemapper == 2 && !se.Graphics.Bloom);
+    CHECK(!se.RunString("Graphics.Get('NoSuchThing')"));   // clear error for typos
+
+    // Reset -> defaults; Load -> the saved player choices.
+    CHECK(se.RunString("Graphics.Reset(); assert(Graphics.Get('Bloom') == true); assert(Graphics.Load()); assert(Graphics.Get('Bloom') == false)"));
+    CHECK(std::filesystem::exists(std::filesystem::path(dir) / "graphics.cfg"));
+    std::filesystem::remove_all(dir);
+}

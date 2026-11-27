@@ -506,6 +506,138 @@ int A_Quit(lua_State* L) { Engine(L).QuitRequested = true; return 0; }
 int A_SetTitle(lua_State* L) { Engine(L).RequestedTitle = luaL_checkstring(L, 1); return 0; }
 int A_LockCursor(lua_State* L) { Engine(L).CursorLockRequest = lua_toboolean(L, 1) ? 1 : 0; return 0; }
 
+// ---- Graphics library --------------------------------------------------------
+const GraphicsSettings::Field& CheckGraphicsField(lua_State* L, int idx) {
+    const char* key = luaL_checkstring(L, idx);
+    const GraphicsSettings::Field* f = GraphicsSettings::FindField(key);
+    if (!f) luaL_error(L, "Graphics: unknown setting '%s' (see Graphics.Settings())", key);
+    return *f;
+}
+
+void PushGraphicsValue(lua_State* L, const GraphicsSettings& g, const GraphicsSettings::Field& f) {
+    const float v = g.GetNumber(f);
+    switch (f.Type) {
+        case GraphicsSettings::FieldType::Bool: lua_pushboolean(L, v != 0.0f); break;
+        case GraphicsSettings::FieldType::Enum: lua_pushstring(L, f.Options[Clamp((int)v, 0, (int)f.Options.size() - 1)]); break;
+        default: lua_pushnumber(L, v); break;
+    }
+}
+
+int G_Get(lua_State* L) {
+    const auto& f = CheckGraphicsField(L, 1);
+    PushGraphicsValue(L, Engine(L).Graphics, f);
+    return 1;
+}
+
+int G_Set(lua_State* L) {
+    const auto& f = CheckGraphicsField(L, 1);
+    ScriptEngine& se = Engine(L);
+    bool ok = true;
+    if (lua_isboolean(L, 2)) se.Graphics.SetNumber(f, lua_toboolean(L, 2) ? 1.0f : 0.0f);
+    else if (lua_isnumber(L, 2)) se.Graphics.SetNumber(f, (float)lua_tonumber(L, 2));
+    else ok = se.Graphics.Set(f.Key, luaL_checkstring(L, 2));
+    if (ok) se.GraphicsEdited = true;
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+int G_Apply(lua_State* L) { ScriptEngine& se = Engine(L); se.GraphicsApplyRequested = true; se.GraphicsEdited = true; return 0; }
+
+int G_Preset(lua_State* L) {
+    const std::string name = luaL_checkstring(L, 1);
+    ScriptEngine& se = Engine(L);
+    for (auto p : {GraphicsSettings::Preset::Low, GraphicsSettings::Preset::Medium, GraphicsSettings::Preset::High, GraphicsSettings::Preset::Ultra}) {
+        if (name == GraphicsSettings::PresetName(p)) { se.Graphics.ApplyPreset(p); se.GraphicsEdited = true; lua_pushboolean(L, 1); return 1; }
+    }
+    luaL_error(L, "Graphics.Preset: expected \"Low\", \"Medium\", \"High\" or \"Ultra\"");
+    return 0;
+}
+
+int G_Reset(lua_State* L) { ScriptEngine& se = Engine(L); se.Graphics = se.GraphicsDefaults; se.GraphicsEdited = true; return 0; }
+
+std::filesystem::path GraphicsFile(lua_State* L) { return std::filesystem::path(SceneOf(L).SaveDirectory) / "graphics.cfg"; }
+
+int G_Save(lua_State* L) {
+    std::error_code ec;
+    std::filesystem::create_directories(SceneOf(L).SaveDirectory, ec);
+    lua_pushboolean(L, Engine(L).Graphics.SaveFile(GraphicsFile(L).string()));
+    return 1;
+}
+
+int G_Load(lua_State* L) {
+    ScriptEngine& se = Engine(L);
+    const bool ok = se.Graphics.LoadFile(GraphicsFile(L).string());
+    if (ok) se.GraphicsEdited = true;
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+void PushStringArray(lua_State* L, const std::vector<std::string>& items) {
+    lua_createtable(L, (int)items.size(), 0);
+    for (size_t i = 0; i < items.size(); ++i) { lua_pushstring(L, items[i].c_str()); lua_rawseti(L, -2, (int)i + 1); }
+}
+
+// Options of an enum setting that this machine offers: { {Name, Available, Reason}, ... }
+void PushOptions(lua_State* L, const ScriptEngine& se, const GraphicsSettings::Field& f) {
+    lua_createtable(L, (int)f.Options.size(), 0);
+    int n = 0;
+    for (int i = 0; i < (int)f.Options.size(); ++i) {
+        bool hidden = false;
+        const std::string reason = GraphicsSettings::OptionUnavailable(f, i, se.GPU, GraphicsAPI::OpenGL, &hidden);
+        if (hidden) continue;
+        lua_createtable(L, 0, 3);
+        lua_pushstring(L, f.Options[i]); lua_setfield(L, -2, "Name");
+        lua_pushboolean(L, reason.empty()); lua_setfield(L, -2, "Available");
+        lua_pushstring(L, reason.c_str()); lua_setfield(L, -2, "Reason");
+        lua_rawseti(L, -2, ++n);
+    }
+}
+
+int G_Options(lua_State* L) {
+    const auto& f = CheckGraphicsField(L, 1);
+    if (f.Type != GraphicsSettings::FieldType::Enum) luaL_error(L, "Graphics.Options: '%s' is not an option list", f.Key);
+    PushOptions(L, Engine(L), f);
+    return 1;
+}
+
+int G_Categories(lua_State* L) { PushStringArray(L, GraphicsSettings::Categories()); return 1; }
+
+// Everything needed to generate a settings menu automatically.
+int G_Settings(lua_State* L) {
+    const ScriptEngine& se = Engine(L);
+    const auto& fields = GraphicsSettings::Fields();
+    lua_createtable(L, (int)fields.size(), 0);
+    int n = 0;
+    for (const auto& f : fields) {
+        lua_createtable(L, 0, 10);
+        lua_pushstring(L, f.Key); lua_setfield(L, -2, "Key");
+        lua_pushstring(L, f.Label); lua_setfield(L, -2, "Label");
+        lua_pushstring(L, f.Category); lua_setfield(L, -2, "Category");
+        lua_pushstring(L, f.Help); lua_setfield(L, -2, "Help");
+        const char* type = f.Type == GraphicsSettings::FieldType::Bool ? "bool" : f.Type == GraphicsSettings::FieldType::Enum ? "option" : "number";
+        lua_pushstring(L, type); lua_setfield(L, -2, "Type");
+        if (f.Type == GraphicsSettings::FieldType::Enum) { PushOptions(L, se, f); lua_setfield(L, -2, "Options"); }
+        else if (f.Type != GraphicsSettings::FieldType::Bool) {
+            lua_pushnumber(L, f.Min); lua_setfield(L, -2, "Min");
+            lua_pushnumber(L, f.Max); lua_setfield(L, -2, "Max");
+            lua_pushnumber(L, f.Type == GraphicsSettings::FieldType::Int ? 1.0f : f.Step); lua_setfield(L, -2, "Step");
+        }
+        PushGraphicsValue(L, se.Graphics, f); lua_setfield(L, -2, "Value");
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+
+int G_GPU(lua_State* L) {
+    const GPUInfo& gpu = Engine(L).GPU;
+    lua_createtable(L, 0, 4);
+    lua_pushstring(L, gpu.Name.c_str()); lua_setfield(L, -2, "Name");
+    lua_pushstring(L, GPUInfo::VendorString(gpu.Vendor)); lua_setfield(L, -2, "Vendor");
+    lua_pushboolean(L, gpu.NVIDIA_RTX); lua_setfield(L, -2, "RTX");
+    lua_pushstring(L, "OpenGL"); lua_setfield(L, -2, "API");
+    return 1;
+}
+
 void RegisterLib(lua_State* L, const char* name, std::initializer_list<luaL_Reg> funcs) {
     lua_createtable(L, 0, (int)funcs.size());
     for (const luaL_Reg& r : funcs) { lua_pushcfunction(L, r.func, r.name); lua_setfield(L, -2, r.name); }
@@ -584,6 +716,9 @@ ScriptEngine::ScriptEngine(Scene* scene) : m_Scene(scene) {
                               {"Delete", F_Delete}, {"List", F_List}, {"SaveFolder", F_SaveFolder}});
     RegisterLib(m_L, "HUD", {{"Text", H_Text}, {"Rect", H_Rect}, {"ScreenSize", H_ScreenSize}});
     RegisterLib(m_L, "App", {{"Quit", A_Quit}, {"SetTitle", A_SetTitle}, {"LockCursor", A_LockCursor}});
+    RegisterLib(m_L, "Graphics", {{"Get", G_Get}, {"Set", G_Set}, {"Apply", G_Apply}, {"Preset", G_Preset}, {"Reset", G_Reset},
+                                  {"Save", G_Save}, {"Load", G_Load}, {"Options", G_Options}, {"Categories", G_Categories},
+                                  {"Settings", G_Settings}, {"GPU", G_GPU}});
 
     // The prelude defines real globals, so it runs on the main state (not sandboxed).
     {

@@ -54,6 +54,12 @@ public:
     void ApplyGraphicsSettings(const GraphicsSettings& settings);
     // Project: multithreading options + its game graphics settings.
     void ApplyProjectSettings(const struct Project& project);
+    const GraphicsSettings& GetGraphicsSettings() const { return m_Graphics; }
+
+    // Called when a script calls Graphics.Apply(). Default: apply as-is.
+    // The editor overrides this so play-mode changes never go fullscreen or
+    // touch its saved settings.
+    virtual void OnScriptGraphics(const GraphicsSettings& settings) { ApplyGraphicsSettings(settings); }
 
     // Writes the current backbuffer to a BMP file.
     bool SaveScreenshot(const std::string& path);
@@ -102,6 +108,8 @@ private:
     bool m_Minimized = false;
     int  m_ExitCode = 0;
     float m_Accumulator = 0.0f;
+    GraphicsSettings m_Graphics;          // last requested (unresolved) settings
+    GraphicsSettings m_GraphicsDefaults;  // project defaults (Graphics.Reset)
 
     static inline Application* s_Instance = nullptr;
 };

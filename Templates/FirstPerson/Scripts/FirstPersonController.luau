@@ -2,6 +2,7 @@
 --
 --   Mouse  - look around (click the window to capture the mouse, Esc to release)
 --   WASD   - move          Shift - sprint          Space - jump
+--   Tab    - graphics settings menu (Scripts/SettingsMenu.luau)
 --
 -- The player is a dynamic rigid body with a tall box collider. Each frame we
 -- set its horizontal velocity from the input and keep the vertical velocity
@@ -40,6 +41,19 @@ end
 
 function Controller:OnUpdate(dt: number)
     local body = self.Entity
+
+    -- While the settings menu is open the player stands still.
+    local menu = Scene.Find("SettingsMenu")
+    if menu and menu.Script and menu.Script.Open then
+        local v = body.Velocity
+        body.Velocity = Vector3.new(0, v.y, 0)
+        self.mouseCaptured = false
+        return
+    end
+    if not self.mouseCaptured and menu and menu.Script and menu.Script.WasOpen then
+        -- just closed: the menu re-locked the cursor
+        self.mouseCaptured = true
+    end
 
     -- Mouse capture: Esc releases, clicking captures again.
     if self.mouseCaptured and Input.WasKeyPressed("Escape") then
@@ -109,7 +123,7 @@ function Controller:DrawHUD(grounded: boolean)
     if not self.mouseCaptured then
         HUD.Text(cx - 120, cy + 40, "Click to capture the mouse", Color.White, 1.2)
     end
-    HUD.Text(16, size.y - 30, "WASD move   Shift sprint   Space jump   Esc release mouse", Color.White, 1.0, 0.8)
+    HUD.Text(16, size.y - 30, "WASD move   Shift sprint   Space jump   Tab graphics settings   Esc release mouse", Color.White, 1.0, 0.8)
 end
 
 return Controller

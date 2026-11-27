@@ -77,3 +77,24 @@ instance is reachable through `entity.Script` (e.g. `other.Script:Collect()`).
 
 Scripts run sandboxed: each has its own globals, built-in libraries are
 read-only, and there is no file or OS access.
+
+## Graphics (in-game settings menus)
+
+Scripts edit a copy of the graphics settings, then apply them. The same
+settings exist in Project > Game Graphics Settings (the game's defaults).
+
+| Function | Description |
+|---|---|
+| `Graphics.Get(key)` | Current value: boolean, number, or the option name (e.g. `"MSAA 4x"`) |
+| `Graphics.Set(key, value)` | Change a setting (number, boolean, or option name/index). Returns `true` if valid |
+| `Graphics.Apply()` | Apply all changes made with `Set` / `Preset` / `Reset` / `Load` |
+| `Graphics.Preset(name)` | `"Low"`, `"Medium"`, `"High"` or `"Ultra"` (quality + effects only) |
+| `Graphics.Reset()` | Back to the game's defaults from project.lapis |
+| `Graphics.Save()` / `Graphics.Load()` | Player choices in `Saved/graphics.cfg` (loaded automatically at startup) |
+| `Graphics.Settings()` | Every setting: `{Key, Label, Category, Type, Help, Value, Min, Max, Step, Options}` |
+| `Graphics.Options(key)` | `{ {Name, Available, Reason}, ... }` for this computer (DLSS only listed on NVIDIA RTX) |
+| `Graphics.Categories()` | `{"Display", "Quality", "Effects", "Post Processing", "Frame Generation"}` |
+| `Graphics.GPU()` | `{Name, Vendor, RTX, API}` |
+
+Unavailable options (e.g. FSR 3 on the OpenGL renderer) can still be chosen;
+the engine falls back automatically. A complete menu: `Templates/FirstPerson/Scripts/SettingsMenu.luau`.

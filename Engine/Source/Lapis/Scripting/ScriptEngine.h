@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Lapis/Core/Base.h"
+#include "Lapis/Renderer/GraphicsSettings.h"
 #include "Lapis/Scene/Registry.h"
 
 struct lua_State;
@@ -70,6 +71,15 @@ public:
     bool QuitRequested = false;
     std::string RequestedTitle;
     int  CursorLockRequest = -1;   // -1 = no request, 0 = unlock, 1 = lock
+
+    // Luau Graphics library state. The runtime copies its current settings in
+    // every frame (unless a script has unapplied edits) and applies them when
+    // a script calls Graphics.Apply().
+    GraphicsSettings Graphics;
+    GraphicsSettings GraphicsDefaults;   // the game's baked-in settings (Graphics.Reset)
+    GPUInfo GPU;
+    bool GraphicsEdited = false;         // Set() called since the last sync/apply
+    bool GraphicsApplyRequested = false;
 
 private:
     int  LoadModule(const std::string& path);           // returns registry ref or -1 (cached)

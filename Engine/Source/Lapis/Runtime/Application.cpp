@@ -162,12 +162,24 @@ void Application::Frame(float dt) {
     perf.PhysicsMs = (float)phase.ElapsedMillis();
     perf.PhysicsSteps = (u32)steps;
 
+    // Scripts see the current graphics settings unless they are mid-edit.
+    if (ScriptEngine* se = m_Scene ? m_Scene->TryGetScripts() : nullptr) {
+        if (!se->GraphicsEdited) se->Graphics = m_Graphics;
+        se->GraphicsDefaults = m_GraphicsDefaults;
+        se->GPU = m_Renderer.GetGPUInfo();
+    }
+
     phase.Reset();
     if (m_Scene) m_Scene->OnUpdate(dt);
     OnUpdate(dt);
     perf.ScriptMs = (float)phase.ElapsedMillis();
 
     // Requests made by Luau scripts.
+    if (ScriptEngine* se = m_Scene ? m_Scene->TryGetScripts() : nullptr; se && se->GraphicsApplyRequested) {
+        se->GraphicsApplyRequested = false;
+        se->GraphicsEdited = false;
+        OnScriptGraphics(se->Graphics);
+    }
     if (m_Scene && m_Scene->GetRegistry().Count<LuauScriptComponent>() > 0) {
         ScriptEngine& se = m_Scene->GetScripts();
         if (se.QuitRequested) { se.QuitRequested = false; OnScriptQuit(); }
@@ -208,6 +220,7 @@ void Application::Frame(float dt) {
 }
 
 void Application::ApplyGraphicsSettings(const GraphicsSettings& settings) {
+    m_Graphics = settings;
     m_Renderer.ApplySettings(settings);
     m_Window->SetVSync(settings.VSync);
     m_Spec.MaxFPS = settings.MaxFPS();
@@ -217,6 +230,7 @@ void Application::ApplyGraphicsSettings(const GraphicsSettings& settings) {
 void Application::ApplyProjectSettings(const Project& project) {
     if (project.WorkerThreads != 0 && project.WorkerThreads != JobSystem::GetWorkerCount()) JobSystem::SetWorkerCount(project.WorkerThreads);
     JobSystem::SetEnabled(project.Multithreading);
+    m_GraphicsDefaults = project.Graphics;
     ApplyGraphicsSettings(project.Graphics);
 }
 

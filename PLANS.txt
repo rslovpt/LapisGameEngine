@@ -285,7 +285,7 @@ PHASE 11 - Lapis Editor (Unreal-style)
     chromatic aberration
 [x] GPU detection (vendor / model / RTX); DLSS options only shown on NVIDIA RTX;
     unavailable options fall back automatically at runtime
-[ ] Luau Graphics library: games build their own in-game settings menu
+[x] Luau Graphics library: games build their own in-game settings menu
     (Graphics.Get/Set/Apply/Save, presets, GPU info; player choices saved
     to Saved/graphics.cfg)
 [ ] Frame generation / vendor upscalers wired up: AMD FSR 3, Intel XeSS,

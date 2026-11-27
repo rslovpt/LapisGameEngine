@@ -48,7 +48,8 @@ public:
     // --- systems ----------------------------------------------------------------
     Registry&      GetRegistry() { return registry; }
     PhysicsWorld&  GetPhysics() { return m_Physics; }
-    ScriptEngine&  GetScripts();
+    ScriptEngine&  GetScripts();                 // creates the Luau VM on first use
+    ScriptEngine*  TryGetScripts() const { return m_Scripts.get(); }   // nullptr if no scripts yet
     AssetManager&  GetAssets();
 
     // Root folder for relative asset/script paths (a project's Content dir).

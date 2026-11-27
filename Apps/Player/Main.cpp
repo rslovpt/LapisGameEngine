@@ -35,6 +35,13 @@ protected:
         }
         SetScene(scene);
         ApplyProjectSettings(m_Project);
+        // A player's own choices (saved by the game's Graphics.Save()) win over the defaults.
+        GraphicsSettings mine = m_Project.Graphics;
+        const std::string saved = (std::filesystem::path(scene->SaveDirectory) / "graphics.cfg").string();
+        if (mine.LoadFile(saved)) {
+            LAPIS_INFO("Loaded player graphics settings from {}", saved);
+            ApplyGraphicsSettings(mine);
+        }
         if (!m_Project.MainScript.empty()) scene->GetScripts().RunFile(m_Project.MainScript);
         return true;
     }

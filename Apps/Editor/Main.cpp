@@ -406,6 +406,13 @@ private:
         ui.EndPanel();
     }
 
+    void OnScriptGraphics(const GraphicsSettings& settings) override {
+        GraphicsSettings g = settings;
+        g.Fullscreen = false;          // a game's settings menu must not take over the editor
+        ApplyGraphicsSettings(g);
+        m_Status = "A script changed the graphics settings (restored when play stops)";
+    }
+
     // Renders the viewport with either the editor's own quality or (preview)
     // the project's game settings. Fullscreen never applies to the editor.
     void ApplyEditorGraphics() {
@@ -839,6 +846,7 @@ private:
         SceneSerializer::Deserialize(*restored, m_Snapshot);
         SetScene(restored);
         m_Playing = false;
+        ApplyEditorGraphics();   // undo any Graphics.Apply() made by the game while playing
         if (!GetScene()->GetEntity(m_Selected)) m_Selected = {};
         m_Status = scriptErrors ? Format("Stopped. {} script error(s) - see the log (Logs/LapisEditor.log).", scriptErrors) : "Stopped - scene restored.";
         LAPIS_INFO("Editor: Stop");
