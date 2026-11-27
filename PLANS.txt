@@ -193,6 +193,13 @@ PHASE 8c - Projects & export to standalone .exe
 [x] LapisPlayer runtime: loads a project folder and runs it
 [x] Packager: Export/<Game>/<Game>.exe + Content/ (copy runtime + assets)
 [x] Build.bat: one-click build into Binaries/
+[x] MakeRelease.bat: public release folder Release/LapisEngine-<version>/
+    (+ .zip): prebuilt editor/player/packager/diagnostics with the C++ runtime
+    linked in, templates, example projects, exported demos, docs, licenses
+[ ] Export Settings dialog before exporting: game name, version, platform
+    (Windows now; Linux/Mac/Android greyed out), output folder + Browse,
+    startup scene, window mode/size, console/logging, graphics API; saved
+    in project.lapis
 
 ------------------------------------------------------------------------------
 PHASE 8d - Diagnostics
@@ -218,6 +225,18 @@ PHASE 8e - Stress tests & optimization
 [ ] Manual control: project settings (thread count, which systems run in
     parallel) + a script API to schedule your own parallel jobs
 [ ] GPU timing queries (real GPU ms, not just CPU submit time)
+--- Second optimization pass (after test session 2: 13k objects 261 FPS,
+    13k scripts 64 FPS) ---
+[ ] Rendering: cached static draw batches (no per-frame rebuild when nothing
+    moved), mesh LODs + screen-size LOD selection, distance/size culling,
+    sorting by pipeline/material to cut state changes, persistent instance
+    buffers, Hi-Z occlusion culling, GPU-driven culling + indirect draws later
+[ ] Scripting: Luau native code generation, cheaper Entity property access
+    (cached refs, no per-call allocations), one batched OnUpdate dispatch
+    per script class instead of per-entity calls, Luau Actors (parallel)
+[ ] Foliage / grass system: GPU-instanced, wind animated in the vertex shader,
+    density painting, distance fade - hundreds of thousands of blades with
+    zero scripts. New stress test: Grass
 
 ------------------------------------------------------------------------------
 PHASE 9 - Sandbox game (engine showcase)
@@ -303,6 +322,46 @@ PHASE 11 - Lapis Editor (Unreal-style)
     to Saved/graphics.cfg)
 [ ] Frame generation / vendor upscalers wired up: AMD FSR 3, Intel XeSS,
     NVIDIA DLSS (+ Frame Generation) - need the DX12 / Vulkan backend
+
+[ ] EDITOR REDESIGN (Roblox Studio-like, not a copy): ribbon toolbar with
+    icon buttons + tabs (Home / Model / Test / View), Explorer tree with
+    per-type icons + search, Properties grid with categories, Toolbox (asset
+    library with thumbnails), Output + command bar, resizable/dockable panels,
+    polished dark theme, icon atlas
+[ ] Lapis MCP server for the editor (only if Blender -> editor import can't
+    cover asset workflows)
+
+------------------------------------------------------------------------------
+PHASE 11b - Lapis Hub (launcher, "pretty soon")
+------------------------------------------------------------------------------
+Like the Unreal / Unity hubs: the first thing you open. Connects all Lapis
+apps together.
+[ ] LapisHub.exe: recent + current projects (thumbnails, last opened, path),
+    open / remove from list / show in Explorer
+[ ] New Project: pick template, name and ANY folder on disk
+[ ] Launch the Editor, Diagnostics, exported games; open docs
+[ ] Engine versions installed side by side (Release/LapisEngine-x.y.z) and
+    which version each project uses; check for updates later
+[ ] Editor File > Open Project / Recent Projects shares the Hub's list
+
+------------------------------------------------------------------------------
+PHASE 11c - Visual quality (Unreal-like)
+------------------------------------------------------------------------------
+[ ] Physically based shading: GGX / Smith / Schlick (metallic-roughness)
+[ ] Image-based lighting from the sky (diffuse irradiance + specular)
+[ ] Cascaded shadow maps (sharp near, wide far), contact shadows
+[ ] Physical sky / atmosphere, sun disk, height fog with sun scattering
+[ ] Normal maps, roughness/metallic/AO maps, emissive
+[ ] Auto exposure (eye adaptation), better default color grading
+[ ] Screen-space reflections
+
+------------------------------------------------------------------------------
+PHASE 11d - Asset pipeline + Blender
+------------------------------------------------------------------------------
+[ ] glTF 2.0 importer (.glb / .gltf: meshes, materials, textures, hierarchy)
+[ ] Asset pack made in Blender (via the Blender MCP): low-poly + detailed
+    houses, trees, rocks, fences, crates, barrels, lamps, grass clumps;
+    exported as .glb and used in stress tests and example scenes
 
 ------------------------------------------------------------------------------
 PHASE 12 - Multiple graphics APIs (after the first Windows test session)

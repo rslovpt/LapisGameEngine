@@ -39,5 +39,5 @@
 #include "Lapis/Runtime/Project.h"
 
 namespace Lapis {
-constexpr const char* EngineVersion = "0.1.0";
+constexpr const char* EngineVersion = "0.2.0";
 }

@@ -160,6 +160,14 @@ int main(int argc, char** argv) {
         R.Check("Unit tests", summary.Failed == 0, Format("{} / {} passed", summary.Total - summary.Failed, summary.Total));
     }
 
+    // --unit-only: CPU tests only (used by MakeRelease.bat; no window or GPU).
+    if (args.Has("--unit-only")) {
+        Log::RemoveListener(listener);
+        std::printf("%s", R.Body.str().c_str());
+        Log::CloseFile();
+        return R.Failed == 0 ? 0 : 1;
+    }
+
     // ------------------------------------------------------- graphics APIs
     // Every graphics API compiled into this build gets its own window, device
     // and renderer, draws the test scene, and has its pixels checked.

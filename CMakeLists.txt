@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(LapisGameEngine
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Lapis - a from-scratch C++17 / OpenGL 4.5 game engine"
     LANGUAGES CXX)
 
@@ -26,6 +26,13 @@ if(LAPIS_SANITIZE)
     message(STATUS "Lapis: sanitizers enabled")
 endif()
 
+
+# Release packages (MakeRelease.bat) link the C/C++ runtime statically so the
+# editor runs on PCs without the Visual C++ Redistributable installed.
+option(LAPIS_STATIC_RUNTIME "Link the MSVC runtime statically" OFF)
+if(MSVC AND LAPIS_STATIC_RUNTIME)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # Put every executable and library in one place so the Sandbox can find
 # its Assets folder relative to the executable.
